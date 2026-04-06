@@ -7,30 +7,31 @@ import { runAccountCommand } from "./lib/account-cli.js";
 import { buildHeadersFromAccount, resolveAccount } from "./lib/accounts.js";
 import { loadMediaSession, printProvidersSummary, resolveMediaTarget } from "./lib/providers.js";
 const cli = meow(`
-  Usage
+  用法
     $ bbcli
-    $ bbcli <bilibili-url-or-bvid>
+    $ bbcli <bilibili-链接或 BV 号>
     $ bbcli providers [id]
     $ bbcli account <bind|list|show|use|remove|check> ...
 
-  Options
-    --inspect     Load page data without launching a player
-    --vo          Force mpv output mode: auto | kitty | sixel | tct
-    --no-fast     Disable mpv --profile=sw-fast
-    --account     Select an account name for the active provider
-    --provider    Provider name for account commands
-    --name        Account name for account commands
-    --cookie      Bind a raw Cookie header to an account
-    --cookie-file Import Cookie text or a Netscape cookie jar from a file
-    --cookie-stdin  Read the cookie value from stdin
-    --remote      Run a provider-specific remote account probe when supported
-    --token       Bind a bearer token to an account
-    --token-stdin Read the bearer token from stdin
-    --header      Bind an extra header, repeatable, format: 'Key: Value'
-    --note        Optional note attached to an account
-    --default     Make the bound account the provider default
+  选项
+    --inspect     只加载页面数据，不启动播放器
+    --vo          强制指定 mpv 输出模式：auto | kitty | sixel | tct
+    --no-fast     禁用 mpv 的 --profile=sw-fast
+    --external-player  当 mpv 不可用时，允许 ffplay 以单独窗口打开
+    --account     选择当前平台要使用的账号名
+    --provider    为媒体或账号命令指定平台名
+    --name        为账号命令指定账号名
+    --cookie      将原始 Cookie 请求头绑定到账号
+    --cookie-file 从文件导入 Cookie 文本或 Netscape cookie jar
+    --cookie-stdin 从标准输入读取 Cookie
+    --remote      在支持时执行平台远程登录探测
+    --token       将 Bearer Token 绑定到账号
+    --token-stdin 从标准输入读取 Bearer Token
+    --header      绑定额外请求头，可重复使用，格式：'Key: Value'
+    --note        账号备注
+    --default     将该账号设为平台默认账号
 
-  Examples
+  示例
     $ bbcli
     $ bbcli BV17PYqerEtA
     $ bbcli https://www.bilibili.com/video/BV17PYqerEtA/
@@ -56,6 +57,10 @@ const cli = meow(`
         fast: {
             type: "boolean",
             default: true,
+        },
+        externalPlayer: {
+            type: "boolean",
+            default: false,
         },
         account: {
             type: "string",
@@ -112,7 +117,7 @@ async function main() {
     if (cli.input[0] === "account") {
         const command = cli.input[1];
         if (!command) {
-            throw new Error("Missing account subcommand.");
+            throw new Error("缺少 account 子命令。");
         }
         const exitCode = await runAccountCommand(command, cli.input.slice(2), {
             name: cli.flags.name,
@@ -144,13 +149,13 @@ async function main() {
         await printNonInteractiveSession(target, cli.flags.account, cli.flags.inspect);
         return;
     }
-    render(_jsx(App, { target: target, inspectOnly: cli.flags.inspect, preferredVo: vo, useFastProfile: cli.flags.fast, selectedAccountName: cli.flags.account, providerOverride: cli.flags.provider }));
+    render(_jsx(App, { target: target, inspectOnly: cli.flags.inspect, preferredVo: vo, useFastProfile: cli.flags.fast, allowExternalPlayer: cli.flags.externalPlayer, selectedAccountName: cli.flags.account, providerOverride: cli.flags.provider }));
 }
 function parseVo(value) {
     if (value === "auto" || value === "kitty" || value === "sixel" || value === "tct") {
         return value;
     }
-    throw new Error(`Unsupported --vo value: ${value}`);
+    throw new Error(`不支持的 --vo 参数值：${value}`);
 }
 function handleCliError(error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -159,13 +164,13 @@ function handleCliError(error) {
 }
 function printNonInteractiveHelp() {
     console.log("BBCLI");
-    console.log("Run `bbcli` in an interactive terminal to open the Discover/Search/Library/Accounts launcher.");
+    console.log("请在可交互终端中运行 `bbcli`，进入发现 / 搜索 / 书库 / 账号 启动器。");
     console.log("");
-    console.log("Direct playback:");
+    console.log("直接播放：");
     console.log("  bbcli BV17PYqerEtA");
     console.log("  bbcli https://www.bilibili.com/video/BV17PYqerEtA/");
     console.log("");
-    console.log("Useful commands:");
+    console.log("常用命令：");
     console.log("  bbcli providers");
     console.log("  bbcli account list");
 }
@@ -176,14 +181,14 @@ async function printNonInteractiveSession(target, selectedAccountName, inspectOn
     console.log("BBCLI");
     console.log(session.title);
     console.log(`${session.ownerName} | ${session.bvid} | ${formatDuration(session.durationSeconds)}`);
-    console.log(`Provider: ${target.providerLabel}`);
+    console.log(`平台：${target.providerLabel}`);
     if (account) {
-        console.log(`Account: ${account.provider}:${account.name}`);
+        console.log(`账号：${account.provider}:${account.name}`);
     }
-    console.log(`Recommended stream: ${selectedVariant?.label ?? "n/a"} | ${selectedVariant?.codecLabel ?? "n/a"}`);
-    console.log(`Page: ${session.pageUrl}`);
+    console.log(`推荐码流：${selectedVariant?.label ?? "无"} | ${selectedVariant?.codecLabel ?? "无"}`);
+    console.log(`页面：${session.pageUrl}`);
     if (!inspectOnly) {
-        console.log("Playback was skipped because BBCLI is running without an interactive terminal.");
+        console.log("当前不是交互式终端，因此已跳过播放。");
     }
 }
 async function buildRequestAccount(providerId, selectedAccountName) {

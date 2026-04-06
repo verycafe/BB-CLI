@@ -126,6 +126,18 @@ print_success() {
 
   log "install completed"
   printf '\nTry:\n  %s providers\n' "$bbcli_command"
+
+  if ! command -v mpv >/dev/null 2>&1; then
+    printf '\nTerminal playback needs mpv, and it is not installed yet.\n' >&2
+
+    if [ "$(uname -s)" = "Darwin" ] && command -v brew >/dev/null 2>&1; then
+      printf 'Install it with:\n  brew install mpv ffmpeg\n' >&2
+    else
+      printf 'Install mpv with your system package manager before trying to play video.\n' >&2
+    fi
+
+    printf 'BBCLI will stay in terminal mode by default and will not auto-open a separate ffplay window.\n' >&2
+  fi
 }
 
 main() {

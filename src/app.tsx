@@ -5,7 +5,6 @@ import {Box, Newline, Text, useApp, useInput, useStdin, type Key} from "ink";
 
 import {
   bindAccount,
-  buildAccountStorePath,
   buildHeadersFromAccount,
   listAccounts,
   resolveAccount,
@@ -31,9 +30,7 @@ import {
 } from "./lib/player.js";
 import {
   ACCOUNT_CONNECTORS,
-  DISCOVER_CONNECTORS,
   LIBRARY_CONNECTORS,
-  SEARCH_CONNECTORS,
   type WorkspaceConnector,
 } from "./lib/workspace-catalog.js";
 
@@ -42,6 +39,7 @@ type Props = {
   inspectOnly: boolean;
   preferredVo: PlayerVo;
   useFastProfile: boolean;
+  allowExternalPlayer: boolean;
   selectedAccountName?: string;
   providerOverride?: string;
 };
@@ -54,6 +52,7 @@ type AppState =
   | {status: "error"; error: string};
 
 type HomeTab = "discover" | "search" | "library" | "accounts";
+type HomeView = "menu" | "workspace";
 
 type HomeProviderSummary = {
   id: string;
@@ -97,6 +96,33 @@ type AccountFormState = {
   defaultAccount?: string;
 };
 
+const HOME_TABS: Array<{
+  id: HomeTab;
+  label: string;
+  summary: string;
+}> = [
+  {
+    id: "discover",
+    label: "发现",
+    summary: "推荐视频与内容入口。",
+  },
+  {
+    id: "search",
+    label: "搜索",
+    summary: "搜索视频、链接与未来多平台内容。",
+  },
+  {
+    id: "library",
+    label: "书库",
+    summary: "阅读、本地文件与收藏内容。",
+  },
+  {
+    id: "accounts",
+    label: "账号",
+    summary: "绑定平台账号与身份。",
+  },
+];
+
 const EMPTY_ACCOUNT_FORM: AccountFormState = {
   activeField: "name",
   inputMode: "cookie",
@@ -110,7 +136,7 @@ const EMPTY_ACCOUNT_FORM: AccountFormState = {
   defaultAccount: undefined,
 };
 
-export default function App({target, inspectOnly, preferredVo, useFastProfile, selectedAccountName, providerOverride}: Props) {
+export default function App({target, inspectOnly, preferredVo, useFastProfile, allowExternalPlayer, selectedAccountName, providerOverride}: Props) {
   const {exit} = useApp();
   const {isRawModeSupported} = useStdin();
   const providerDescriptors = listKnownProviders();
@@ -128,6 +154,8 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
   const [launchInspectOnly, setLaunchInspectOnly] = useState(inspectOnly);
   const [launchVo, setLaunchVo] = useState<PlayerVo>(preferredVo);
   const [homeTab, setHomeTab] = useState<HomeTab>("discover");
+  const [homeView, setHomeView] = useState<HomeView>("menu");
+  const [homeMenuIndex, setHomeMenuIndex] = useState(0);
   const [selectedAccountProviderId, setSelectedAccountProviderId] = useState(
     providerOverride ?? defaultAccountProvider?.id ?? homeMediaProviderId,
   );
@@ -239,7 +267,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
           loading: false,
           items,
           selectedIndex: 0,
-          message: items.length === 0 ? "No recommendations are available right now." : undefined,
+          message: items.length === 0 ? "当前没有可用推荐内容。" : undefined,
         });
       });
     })().catch((error) => {
@@ -289,7 +317,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
             support,
             selectedIndex: 0,
             account: requestAccount,
-            message: launchInspectOnly ? "Inspect mode enabled. Playback is disabled." : undefined,
+            message: launchInspectOnly ? "当前是检查模式，已禁用播放。" : undefined,
           });
         });
       } catch (error) {
@@ -317,7 +345,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
 
     if (state.status === "error") {
       if (inputKey === "b" || inputKey === "h") {
-        returnToHome("discover");
+        returnToHome(homeTab);
         return;
       }
 
@@ -341,7 +369,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
     }
 
     if (inputKey === "b" || inputKey === "h") {
-      returnToHome("discover");
+      returnToHome(homeTab);
       return;
     }
 
@@ -376,7 +404,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
       if (key.return || inputKey === "p") {
         setState({
           ...state,
-          message: "Inspect mode is active. Re-run without --inspect to launch playback.",
+          message: "当前是检查模式。请不要使用 --inspect 重新运行，才能真正播放。",
         });
       }
 
@@ -385,10 +413,22 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
 
     if (key.return || inputKey === "p") {
       const variant = state.session.variants[state.selectedIndex]!;
-      const plan = buildLaunchPlan(state.session, variant, state.support, {
-        playerVo: launchVo,
-        useFastProfile,
-      });
+      let plan: LaunchPlan;
+
+      try {
+        plan = buildLaunchPlan(state.session, variant, state.support, {
+          playerVo: launchVo,
+          useFastProfile,
+          allowExternalPlayer,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setState({
+          ...state,
+          message,
+        });
+        return;
+      }
 
       setState({
         status: "playing",
@@ -396,7 +436,9 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
         support: state.support,
         selectedIndex: state.selectedIndex,
         account: state.account,
-        message: `Launching ${plan.player} with ${state.support.mpvInstalled ? state.support.preferredVo : "windowed"} output...`,
+        message: plan.player === "mpv"
+          ? `正在使用 ${launchVo === "auto" ? state.support.preferredVo : launchVo} 输出模式启动 mpv...`
+          : "正在以单独窗口启动 ffplay...",
       });
 
       process.stdout.write("\x1Bc");
@@ -411,7 +453,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
             selectedIndex: state.selectedIndex,
             account: state.account,
             lastPlan: plan,
-            message: `${plan.player} exited with code ${code}. Press b to return to recommendations.`,
+            message: `${plan.player} 已退出，退出码为 ${code}。按 b 返回上一页。`,
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
@@ -422,7 +464,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
             selectedIndex: state.selectedIndex,
             account: state.account,
             lastPlan: plan,
-            message: `Player launch failed: ${message}`,
+            message: `播放器启动失败：${message}`,
           });
         }
       })();
@@ -435,29 +477,22 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
       return;
     }
 
-    if (inputKey === "1") {
-      setHomeTab("discover");
+    if (homeView === "menu") {
+      handleHomeMenuInput(inputKey, key);
       return;
     }
 
-    if (inputKey === "2" || inputKey === "/") {
-      setHomeTab("search");
-      if (inputKey === "/") {
-        setSearch((current) => ({
-          ...current,
-          message: "Type keywords, or paste a Bilibili link and press Enter.",
-        }));
-      }
+    if (inputKey === "b" || inputKey === "h") {
+      setHomeView("menu");
       return;
     }
 
-    if (inputKey === "3") {
-      setHomeTab("library");
-      return;
-    }
-
-    if (inputKey === "4" || inputKey === "a") {
-      setHomeTab("accounts");
+    if (inputKey === "/") {
+      openHomeWorkspace("search");
+      setSearch((current) => ({
+        ...current,
+        message: "输入关键词，或粘贴 Bilibili 链接后按回车。",
+      }));
       return;
     }
 
@@ -472,7 +507,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
     }
 
     if (homeTab !== "search" && homeTab !== "accounts" && isPlainTextInput(inputKey, key)) {
-      setHomeTab("search");
+      openHomeWorkspace("search");
       setSearch((current) => ({
         ...current,
         query: current.query + inputKey.replace(/[\r\n]+/g, ""),
@@ -499,6 +534,53 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
     }
 
     handleAccountInput(inputKey, key);
+  }
+
+  function handleHomeMenuInput(inputKey: string, key: Key): void {
+    if (key.upArrow || inputKey === "k") {
+      setHomeMenuIndex((current) => Math.max(0, current - 1));
+      return;
+    }
+
+    if (key.downArrow || inputKey === "j") {
+      setHomeMenuIndex((current) => Math.min(HOME_TABS.length - 1, current + 1));
+      return;
+    }
+
+    if (key.return) {
+      const nextTab = HOME_TABS[homeMenuIndex]?.id;
+      if (nextTab) {
+        openHomeWorkspace(nextTab);
+      }
+      return;
+    }
+
+    if (inputKey === "/") {
+      openHomeWorkspace("search");
+      setSearch((current) => ({
+        ...current,
+        message: "输入关键词，或粘贴 Bilibili 链接后按回车。",
+      }));
+      return;
+    }
+
+    if (isPlainTextInput(inputKey, key)) {
+      openHomeWorkspace("search");
+      setSearch((current) => ({
+        ...current,
+        query: current.query + inputKey.replace(/[\r\n]+/g, ""),
+        message: undefined,
+      }));
+    }
+  }
+
+  function openHomeWorkspace(tab: HomeTab): void {
+    setHomeTab(tab);
+    const nextIndex = HOME_TABS.findIndex((item) => item.id === tab);
+    if (nextIndex >= 0) {
+      setHomeMenuIndex(nextIndex);
+    }
+    setHomeView("workspace");
   }
 
   function handleRecommendationInput(inputKey: string, key: Key): void {
@@ -557,7 +639,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
         message: undefined,
         lastRunQuery: undefined,
       }));
-      setHomeTab("discover");
+      setHomeView("menu");
       return;
     }
 
@@ -592,7 +674,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
       if (!trimmed) {
         setSearch((current) => ({
           ...current,
-          message: "Enter keywords, or paste a Bilibili link and press Enter.",
+          message: "请输入关键词，或粘贴 Bilibili 链接后按回车。",
         }));
         return;
       }
@@ -627,12 +709,12 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
   }
 
   function handleAccountInput(inputKey: string, key: Key): void {
-    if ((key.leftArrow || inputKey === "[") && !providerOverride) {
+    if (inputKey === "[" && !providerOverride) {
       cycleAccountProvider(-1);
       return;
     }
 
-    if ((key.rightArrow || inputKey === "]") && !providerOverride) {
+    if (inputKey === "]" && !providerOverride) {
       cycleAccountProvider(1);
       return;
     }
@@ -665,7 +747,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
     }
 
     if (key.escape) {
-      setHomeTab("discover");
+      setHomeView("menu");
       return;
     }
 
@@ -717,7 +799,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
     setSearch((current) => ({
       ...current,
       loading: true,
-      message: `Searching ${homeMediaProvider?.label ?? homeMediaProviderId}...`,
+      message: `正在搜索 ${homeMediaProvider?.label ?? homeMediaProviderId}...`,
     }));
 
     try {
@@ -729,7 +811,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
         lastRunQuery: query,
         results,
         selectedIndex: 0,
-        message: results.length === 0 ? "No videos matched that query." : `Found ${results.length} videos. Press Enter to open the selected one.`,
+        message: results.length === 0 ? "没有找到匹配的视频。" : `找到 ${results.length} 个结果，按回车打开当前选中项。`,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -748,7 +830,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
     if (!accountName) {
       setAccountForm((current) => ({
         ...current,
-        message: "Enter an account name first.",
+        message: "请先输入账号名称。",
       }));
       return;
     }
@@ -756,7 +838,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
     if (!accountValue) {
       setAccountForm((current) => ({
         ...current,
-        message: current.inputMode === "cookie" ? "Paste the Cookie header first." : "Enter a cookie file path first.",
+        message: current.inputMode === "cookie" ? "请先粘贴 Cookie。" : "请先输入 Cookie 文件路径。",
       }));
       return;
     }
@@ -764,7 +846,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
     setAccountForm((current) => ({
       ...current,
       busy: true,
-      message: current.inputMode === "cookie" ? "Binding account from pasted Cookie..." : "Binding account from cookie file...",
+      message: current.inputMode === "cookie" ? "正在根据粘贴的 Cookie 绑定账号..." : "正在根据 Cookie 文件绑定账号...",
     }));
 
     try {
@@ -788,7 +870,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
         value: "",
         note: "",
         activeField: "name",
-        message: `Bound ${result.account.provider}:${result.account.name}.`,
+        message: `已绑定 ${result.account.provider}:${result.account.name}。`,
       }));
       setHomeDataKey((value) => value + 1);
       setRecommendationKey((value) => value + 1);
@@ -815,6 +897,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
   function returnToHome(tab: HomeTab): void {
     setActiveTarget(undefined);
     setHomeTab(tab);
+    setHomeView("workspace");
     setState({status: "home"});
     if (tab === "discover") {
       setRecommendationKey((value) => value + 1);
@@ -826,11 +909,11 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
       <>
         {isRawModeSupported ? <InputController onInput={handleAppInput} /> : null}
         <HomeScreen
+          view={homeView}
           tab={homeTab}
-          providerId={homeMediaProviderId}
+          menuIndex={homeMenuIndex}
           providerLabel={homeMediaProvider?.label ?? homeMediaProviderId}
           inspectOnly={launchInspectOnly}
-          preferredVo={launchVo}
           providers={providerSummaries}
           recommendations={recommendations}
           search={search}
@@ -857,7 +940,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
         {isRawModeSupported ? <InputController onInput={handleAppInput} /> : null}
         <Box flexDirection="column">
           <Text color="green">{state.message}</Text>
-          <Text dimColor>Return here after the player exits.</Text>
+          <Text dimColor>播放器退出后会回到这里。</Text>
         </Box>
       </>
     );
@@ -871,6 +954,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
         support={state.support}
         selectedIndex={state.selectedIndex}
         inspectOnly={launchInspectOnly}
+        allowExternalPlayer={allowExternalPlayer}
         target={activeTarget}
         account={state.account}
         message={state.message}
@@ -886,11 +970,11 @@ function InputController({onInput}: {onInput: (inputKey: string, key: Key) => vo
 }
 
 function HomeScreen({
+  view,
   tab,
-  providerId,
+  menuIndex,
   providerLabel,
   inspectOnly,
-  preferredVo,
   providers,
   recommendations,
   search,
@@ -899,11 +983,11 @@ function HomeScreen({
   accountProviderLabel,
   isInteractive,
 }: {
+  view: HomeView;
   tab: HomeTab;
-  providerId: string;
+  menuIndex: number;
   providerLabel: string;
   inspectOnly: boolean;
-  preferredVo: PlayerVo;
   providers: HomeProviderSummary[];
   recommendations: RecommendationState;
   search: SearchState;
@@ -912,60 +996,53 @@ function HomeScreen({
   accountProviderLabel: string;
   isInteractive: boolean;
 }) {
-  const totalAccounts = providers.reduce((count, provider) => count + provider.boundAccounts, 0);
-  const connectedProviders = providers.filter((provider) => provider.boundAccounts > 0).length;
-  const activeLaneLabel = tab === "accounts" ? accountProviderLabel : tab === "library" ? "Personal shelf" : providerLabel;
+  const activeLaneLabel = view === "menu"
+    ? "首页菜单"
+    : tab === "accounts"
+      ? accountProviderLabel
+      : tab === "library"
+        ? "个人书架"
+        : providerLabel;
+  const activeMenu = HOME_TABS[menuIndex];
 
   return (
     <Box flexDirection="column">
       <BrandHeader
-        activeTab={tab}
+        activeTab={view === "menu" ? undefined : tab}
         providerLabel={activeLaneLabel}
-        inspectOnly={inspectOnly}
-        preferredVo={preferredVo}
-        totalAccounts={totalAccounts}
-        connectedProviders={connectedProviders}
+        inspectOnly={view === "workspace" ? inspectOnly : false}
       />
       <Newline />
 
-      <Box>
-        <TabLabel label="1 Discover" selected={tab === "discover"} />
-        <Text>  </Text>
-        <TabLabel label="2 Search" selected={tab === "search"} />
-        <Text>  </Text>
-        <TabLabel label="3 Library" selected={tab === "library"} />
-        <Text>  </Text>
-        <TabLabel label="4 Accounts" selected={tab === "accounts"} />
-      </Box>
+      {view === "menu" ? <MenuScreen selectedIndex={menuIndex} /> : null}
+      {view === "workspace" && tab === "discover" ? <RecommendationPanel state={recommendations} providerLabel={providerLabel} /> : null}
+      {view === "workspace" && tab === "search" ? <SearchPanel state={search} providerLabel={providerLabel} /> : null}
+      {view === "workspace" && tab === "library" ? <LibraryPanel providers={providers} /> : null}
+      {view === "workspace" && tab === "accounts" ? <AccountPanel state={accountForm} providerLabel={accountProviderLabel} accountProviderId={accountProviderId} providers={providers} /> : null}
 
       <Newline />
-      {tab === "discover" ? <RecommendationPanel state={recommendations} providerId={providerId} providerLabel={providerLabel} /> : null}
-      {tab === "search" ? <SearchPanel state={search} providerId={providerId} providerLabel={providerLabel} /> : null}
-      {tab === "library" ? <LibraryPanel providers={providers} /> : null}
-      {tab === "accounts" ? <AccountPanel state={accountForm} providerLabel={accountProviderLabel} accountProviderId={accountProviderId} providers={providers} /> : null}
+      {!isInteractive ? <Text dimColor>当前终端不支持交互输入，请在正常终端里运行 BBCLI。</Text> : null}
+      {isInteractive && view === "menu" ? <Text dimColor>{`${activeMenu?.label ?? "菜单"}：上下方向键选择，回车进入，直接输入可进入搜索，q 退出。`}</Text> : null}
+      {isInteractive && view === "workspace" && tab === "discover" ? <Text dimColor>上下方向键选择视频，回车打开，Esc 或 b 返回菜单。</Text> : null}
+      {isInteractive && view === "workspace" && tab === "search" ? <Text dimColor>输入后回车搜索，或对结果回车打开；Esc 或 b 返回菜单。</Text> : null}
+      {isInteractive && view === "workspace" && tab === "library" ? <Text dimColor>Esc 或 b 返回菜单。</Text> : null}
+      {isInteractive && view === "workspace" && tab === "accounts" ? <Text dimColor>{'`[` 和 `]` 切换连接器，Tab 切字段，回车绑定，Esc 或 b 返回菜单。'}</Text> : null}
+    </Box>
+  );
+}
 
-      <Newline />
-      <Text color="green">Controls</Text>
-      {isInteractive ? (
-        <>
-          <Text>1/2/3/4 switch workspaces. i toggles inspect, v cycles VO, q quits.</Text>
-          {tab === "discover" ? <Text>Discover: j/k or arrows move, Enter opens, r refreshes, typing jumps into search.</Text> : null}
-          {tab === "search" ? <Text>Search: type keywords or paste a Bilibili link, Enter searches or opens, j/k selects results, Esc returns.</Text> : null}
-          {tab === "library" ? <Text>Library: this is the future shelf for WeRead, local EPUB/PDF, saved watch-later items, and synced reading progress.</Text> : null}
-          {tab === "accounts" ? <Text>Accounts: left/right or [/] switch live connectors, Tab switches field, m toggles cookie/file mode, d toggles default, Enter binds.</Text> : null}
-        </>
-      ) : (
-        <Text>Interactive input is not available in this terminal session. Run BBCLI in a normal terminal.</Text>
-      )}
-
-      <Newline />
-      <Text color="green">Providers</Text>
-      {providers.map((provider) => (
-        <Text key={provider.id}>
-          {provider.label}  |  accounts {provider.boundAccounts}{provider.defaultAccount ? `  |  default ${provider.defaultAccount}` : ""}{provider.example ? `  |  ${provider.example}` : ""}
-        </Text>
-      ))}
-      <Text dimColor>{`Account store: ${buildAccountStorePath()}`}</Text>
+function MenuScreen({selectedIndex}: {selectedIndex: number}) {
+  return (
+    <Box flexDirection="column">
+      {HOME_TABS.map((item, index) => {
+        const selected = index === selectedIndex;
+        return (
+          <Box key={item.id} flexDirection="column" marginBottom={1}>
+            <Text color={selected ? "yellow" : undefined}>{`${selected ? ">" : " "} ${item.label}`}</Text>
+            <Text dimColor>{item.summary}</Text>
+          </Box>
+        );
+      })}
     </Box>
   );
 }
@@ -974,25 +1051,15 @@ function BrandHeader({
   activeTab,
   providerLabel,
   inspectOnly,
-  preferredVo,
-  totalAccounts,
-  connectedProviders,
 }: {
-  activeTab: HomeTab;
+  activeTab?: HomeTab;
   providerLabel: string;
   inspectOnly: boolean;
-  preferredVo: PlayerVo;
-  totalAccounts: number;
-  connectedProviders: number;
 }) {
   const mascotLines = [
-    "  .------.  ",
-    " /  .--.  \\ ",
-    "|  | oo |  |",
-    "|  | -- |  |",
-    "|  '----'  |",
-    " \\__====__/ ",
-    "  / /  \\ \\  ",
+    "  (\\_/)",
+    "  (='.'=)",
+    '  (")_(")',
   ];
 
   return (
@@ -1009,10 +1076,8 @@ function BrandHeader({
           <Text color="cyan" bold>
             BBCLI
           </Text>
-          <Text bold>Terminal Swiss Army Hub</Text>
-          <Text dimColor>Watch, read, search, and connect remote or local content from one launcher.</Text>
-          <Text dimColor>{`Workspace: ${formatHomeTab(activeTab)}  |  Active lane: ${providerLabel}  |  Mode: ${inspectOnly ? "inspect" : "play"}`}</Text>
-          <Text dimColor>{`Connected providers: ${connectedProviders}  |  Bound accounts: ${totalAccounts}  |  Preferred VO: ${preferredVo}`}</Text>
+          <Text bold>终端里的内容兔兔工具箱</Text>
+          <Text dimColor>{activeTab ? `当前页面：${formatHomeTab(activeTab)}  |  当前通道：${providerLabel}  |  模式：${inspectOnly ? "检查" : "播放"}` : "选择一个入口开始。"}</Text>
         </Box>
       </Box>
       <Text dimColor>{"-".repeat(78)}</Text>
@@ -1022,22 +1087,18 @@ function BrandHeader({
 
 function RecommendationPanel({
   state,
-  providerId,
   providerLabel,
 }: {
   state: RecommendationState;
-  providerId: string;
   providerLabel: string;
 }) {
   return (
     <Box flexDirection="column">
-      <Text color="green">Discover</Text>
-      <Text dimColor>{`${providerLabel} homepage recommendations are live now. This lane will later merge YouTube, Instagram, WeRead, and other connected feeds.`}</Text>
+      <Text color="green">发现</Text>
+      <Text dimColor>{`${providerLabel} 首页推荐`}</Text>
       <Newline />
-      <ConnectorList title="Discover connectors" items={DISCOVER_CONNECTORS} activeId={providerId} />
-      <Newline />
-      {state.loading ? <Text dimColor>Loading homepage recommendations...</Text> : null}
-      {!state.loading && state.items.length === 0 ? <Text dimColor>{state.message ?? "No recommendations yet."}</Text> : null}
+      {state.loading ? <Text dimColor>正在加载首页推荐...</Text> : null}
+      {!state.loading && state.items.length === 0 ? <Text dimColor>{state.message ?? "当前还没有推荐内容。"}</Text> : null}
       {state.items.slice(0, 8).map((item, index) => {
         const selected = index === state.selectedIndex;
         return (
@@ -1054,22 +1115,18 @@ function RecommendationPanel({
 
 function SearchPanel({
   state,
-  providerId,
   providerLabel,
 }: {
   state: SearchState;
-  providerId: string;
   providerLabel: string;
 }) {
   return (
     <Box flexDirection="column">
-      <Text color="green">Search</Text>
-      <Text dimColor>{`Current source: ${providerLabel}. This search lane is where Google, YouTube, INS, WeRead, and local libraries will eventually plug in too.`}</Text>
+      <Text color="green">搜索</Text>
+      <Text dimColor>{`当前来源：${providerLabel}`}</Text>
       <Newline />
-      <ConnectorList title="Search connectors" items={SEARCH_CONNECTORS} activeId={providerId} />
-      <Newline />
-      <Text>{`> ${state.query || "Type keywords or paste a video link..."}`}</Text>
-      {state.loading ? <Text dimColor>Searching...</Text> : null}
+      <Text>{`> ${state.query || "输入关键词，或粘贴视频链接..."}`}</Text>
+      {state.loading ? <Text dimColor>正在搜索...</Text> : null}
       {state.message ? <Text color="yellow">{state.message}</Text> : null}
       {state.results.map((item, index) => {
         const selected = index === state.selectedIndex;
@@ -1089,21 +1146,15 @@ function LibraryPanel({providers}: {providers: HomeProviderSummary[]}) {
 
   return (
     <Box flexDirection="column">
-      <Text color="green">Library</Text>
-      <Text dimColor>Library is the long-lived personal shelf for saved media, remote reading shelves, and local files.</Text>
+      <Text color="green">书库</Text>
+      <Text dimColor>内容来源</Text>
       <Newline />
-      <ConnectorList title="Library sources" items={LIBRARY_CONNECTORS} />
+      <CompactConnectorRow items={LIBRARY_CONNECTORS} />
       <Newline />
-      <Text>What will live here:</Text>
-      <Text dimColor>- WeRead shelves and reading progress</Text>
-      <Text dimColor>- Local EPUB, PDF, and text libraries</Text>
-      <Text dimColor>- Saved videos, watch later queues, and downloaded sessions</Text>
-      <Text dimColor>- Cross-provider history and resume points</Text>
-      <Newline />
-      <Text>Current connection snapshot:</Text>
+      <Text>当前连接状态：</Text>
       {connected.length > 0 ? connected.map((provider) => (
-        <Text key={provider.id}>{`${provider.label}  |  accounts ${provider.boundAccounts}${provider.defaultAccount ? `  |  default ${provider.defaultAccount}` : ""}`}</Text>
-      )) : <Text dimColor>No connected libraries yet. Use Accounts to start wiring providers in.</Text>}
+        <Text key={provider.id}>{`${provider.label}  |  账号 ${provider.boundAccounts}${provider.defaultAccount ? `  |  默认 ${provider.defaultAccount}` : ""}`}</Text>
+      )) : <Text dimColor>目前还没有连接任何书库来源，可以先去“账号”工作区绑定平台。</Text>}
     </Box>
   );
 }
@@ -1126,8 +1177,8 @@ function AccountPanel({
       label: provider.label,
       status: "live",
       note: provider.boundAccounts > 0
-        ? `${provider.boundAccounts} account${provider.boundAccounts === 1 ? "" : "s"} bound${provider.defaultAccount ? `, default ${provider.defaultAccount}` : ""}.`
-        : "Ready for binding.",
+        ? `已绑定 ${provider.boundAccounts} 个账号${provider.defaultAccount ? `，默认账号为 ${provider.defaultAccount}` : ""}。`
+        : "已可开始绑定。",
     }));
   const plannedConnectors = ACCOUNT_CONNECTORS.filter(
     (connector) => !liveConnectors.some((provider) => provider.id === connector.id),
@@ -1136,74 +1187,69 @@ function AccountPanel({
 
   return (
     <Box flexDirection="column">
-      <Text color="green">Accounts</Text>
-      <Text dimColor>{`Connector target: ${providerLabel}. This workspace will eventually hold Bilibili, WeRead, YouTube, Instagram, and any other provider login flow.`}</Text>
+      <Text color="green">账号</Text>
+      <Text dimColor>{`当前平台：${providerLabel}`}</Text>
       <Newline />
-      <ConnectorList title="Account connectors" items={accountConnectors} activeId={accountProviderId} />
+      <CompactConnectorRow items={accountConnectors} activeId={accountProviderId} />
       <Newline />
-      <Text>{`Bind ${providerLabel} account`}</Text>
-      <Text dimColor>{state.existingAccounts.length > 0 ? `Existing: ${state.existingAccounts.join(", ")}${state.defaultAccount ? `  |  default ${state.defaultAccount}` : ""}` : "No accounts bound yet."}</Text>
+      <Text>{`绑定 ${providerLabel} 账号`}</Text>
+      <Text dimColor>{state.existingAccounts.length > 0 ? `已有账号：${state.existingAccounts.join(", ")}${state.defaultAccount ? `  |  默认 ${state.defaultAccount}` : ""}` : "当前还没有已绑定账号。"}</Text>
       <Newline />
-      <Text color={state.activeField === "name" ? "yellow" : undefined}>{`${state.activeField === "name" ? ">" : " "} Account name: ${state.name || "main"}`}</Text>
-      <Text dimColor>{`  Input mode: ${state.inputMode === "cookie" ? "Paste Cookie" : "Cookie File Path"}  |  Default: ${state.makeDefault ? "yes" : "no"}`}</Text>
-      <Text color={state.activeField === "value" ? "yellow" : undefined}>{`${state.activeField === "value" ? ">" : " "} ${state.inputMode === "cookie" ? "Cookie" : "Cookie file"}: ${formatAccountValue(state.inputMode, state.value)}`}</Text>
-      <Text color={state.activeField === "note" ? "yellow" : undefined}>{`${state.activeField === "note" ? ">" : " "} Note: ${state.note || "optional"}`}</Text>
-      {state.busy ? <Text dimColor>Working...</Text> : null}
+      <Text color={state.activeField === "name" ? "yellow" : undefined}>{`${state.activeField === "name" ? ">" : " "} 账号名：${state.name || "main"}`}</Text>
+      <Text dimColor>{`  输入模式：${state.inputMode === "cookie" ? "粘贴 Cookie" : "Cookie 文件路径"}  |  设为默认：${state.makeDefault ? "是" : "否"}`}</Text>
+      <Text color={state.activeField === "value" ? "yellow" : undefined}>{`${state.activeField === "value" ? ">" : " "} ${state.inputMode === "cookie" ? "Cookie" : "Cookie 文件"}：${formatAccountValue(state.inputMode, state.value)}`}</Text>
+      <Text color={state.activeField === "note" ? "yellow" : undefined}>{`${state.activeField === "note" ? ">" : " "} 备注：${state.note || "可选"}`}</Text>
+      {state.busy ? <Text dimColor>处理中...</Text> : null}
       {state.message ? <Text color="yellow">{state.message}</Text> : null}
     </Box>
   );
 }
 
-function ConnectorList({
-  title,
+function CompactConnectorRow({
   items,
   activeId,
 }: {
-  title: string;
   items: WorkspaceConnector[];
   activeId?: string;
 }) {
   return (
-    <Box flexDirection="column">
-      <Text>{title}</Text>
-      {items.map((item) => {
-        const isActive = item.id === activeId;
+    <Box>
+      {items.map((item, index) => {
+        const active = item.id === activeId;
+        const label = active ? `[${item.label}]` : item.status === "planned" ? `${item.label}·规划中` : item.label;
         return (
-          <Text key={item.id} color={isActive ? "yellow" : undefined}>
-            {`${isActive ? ">" : " "} ${item.label}  |  ${item.status}  |  ${item.note}`}
-          </Text>
+          <React.Fragment key={item.id}>
+            <Text color={active ? "yellow" : item.status === "planned" ? "gray" : undefined}>{label}</Text>
+            {index < items.length - 1 ? <Text>  </Text> : null}
+          </React.Fragment>
         );
       })}
     </Box>
   );
 }
 
-function TabLabel({label, selected}: {label: string; selected: boolean}) {
-  return <Text color={selected ? "yellow" : "gray"}>{label}</Text>;
-}
-
 function formatHomeTab(tab: HomeTab): string {
   if (tab === "discover") {
-    return "Discover";
+    return "发现";
   }
 
   if (tab === "search") {
-    return "Search";
+    return "搜索";
   }
 
   if (tab === "library") {
-    return "Library";
+    return "书库";
   }
 
-  return "Accounts";
+  return "账号";
 }
 
 function LoadingScreen({target}: {target: MediaTarget}) {
   return (
     <Box flexDirection="column">
-      <Text color="yellow">{`Loading ${target.providerLabel} page data...`}</Text>
+      <Text color="yellow">{`正在加载 ${target.providerLabel} 页面数据...`}</Text>
       <Text dimColor>{target.originalInput}</Text>
-      <Text dimColor>Fetching `window.__playinfo__` and `window.__INITIAL_STATE__`.</Text>
+      <Text dimColor>正在抓取 `window.__playinfo__` 和 `window.__INITIAL_STATE__`。</Text>
     </Box>
   );
 }
@@ -1211,9 +1257,9 @@ function LoadingScreen({target}: {target: MediaTarget}) {
 function ErrorScreen({error}: {error: string}) {
   return (
     <Box flexDirection="column">
-      <Text color="red">Failed to load video</Text>
+      <Text color="red">加载视频失败</Text>
       <Text>{error}</Text>
-      <Text dimColor>Press `b` to return to recommendations, or `Enter`, `Esc`, `q` to quit.</Text>
+      <Text dimColor>按 `b` 返回上一页，或按 `Enter`、`Esc`、`q` 退出。</Text>
     </Box>
   );
 }
@@ -1223,6 +1269,7 @@ function Dashboard({
   support,
   selectedIndex,
   inspectOnly,
+  allowExternalPlayer,
   target,
   account,
   message,
@@ -1232,6 +1279,7 @@ function Dashboard({
   support: PlayerSupport;
   selectedIndex: number;
   inspectOnly: boolean;
+  allowExternalPlayer: boolean;
   target?: MediaTarget;
   account?: RequestAccount;
   message?: string;
@@ -1246,17 +1294,28 @@ function Dashboard({
       <Text dimColor>
         {session.ownerName}  |  {formatDuration(session.durationSeconds)}  |  {session.bvid}
       </Text>
-      {target ? <Text dimColor>{`Provider: ${target.providerLabel}`}</Text> : null}
-      {account ? <Text dimColor>{`Account: ${account.provider}:${account.name}`}</Text> : null}
+      {target ? <Text dimColor>{`平台：${target.providerLabel}`}</Text> : null}
+      {account ? <Text dimColor>{`账号：${account.provider}:${account.name}`}</Text> : null}
       <Newline />
 
-      <Text color="green">Playback</Text>
+      <Text color="green">播放</Text>
       <Text>
-        Player: {support.mpvInstalled ? "mpv terminal mode" : support.ffplayInstalled ? "ffplay fallback (non-terminal)" : "missing"}
+        播放器：{
+          support.mpvInstalled
+            ? "mpv 终端模式"
+            : support.ffplayInstalled && allowExternalPlayer
+              ? "ffplay 外部窗口（手动允许）"
+              : support.ffplayInstalled
+                ? "缺少 mpv，已禁用外部窗口回退"
+                : "缺失"
+        }
       </Text>
       <Text>
-        Terminal: {support.detectedTerminal}  |  Preferred VO: {support.preferredVo}
+        终端：{support.detectedTerminal}  |  当前 VO：{support.preferredVo}
       </Text>
+      {!support.mpvInstalled && support.ffplayInstalled && !allowExternalPlayer ? (
+        <Text color="yellow">BBCLI 默认不再自动弹出 ffplay 窗口。请安装 `mpv`；只有你明确接受外部窗口时，才应使用 `--external-player`。</Text>
+      ) : null}
       {support.notes.map((note, index) => (
         <Text key={`${note}-${index}`} dimColor>
           - {note}
@@ -1264,7 +1323,7 @@ function Dashboard({
       ))}
 
       <Newline />
-      <Text color="green">Streams</Text>
+      <Text color="green">码流</Text>
       {session.variants.map((variant, index) => {
         const selected = index === selectedIndex;
         return (
@@ -1275,28 +1334,28 @@ function Dashboard({
       })}
 
       <Newline />
-      <Text color="green">Selected Network Info</Text>
-      <Text>Host: {selectedVariant.host}</Text>
-      <Text>Codec: {selectedVariant.codecLabel}</Text>
+      <Text color="green">当前选中网络信息</Text>
+      <Text>主机：{selectedVariant.host}</Text>
+      <Text>编码：{selectedVariant.codecLabel}</Text>
       <Text>
-        Video bitrate: {formatBitrate(selectedVariant.videoBandwidth)}  |  Audio bitrate: {formatBitrate(selectedVariant.audioBandwidth)}
+        视频码率：{formatBitrate(selectedVariant.videoBandwidth)}  |  音频码率：{formatBitrate(selectedVariant.audioBandwidth)}
       </Text>
-      <Text>Signed URL expires: {selectedVariant.expiresAt ?? "unknown"}</Text>
-      <Text dimColor>Referer: {session.pageUrl}</Text>
+      <Text>签名 URL 过期时间：{selectedVariant.expiresAt ?? "未知"}</Text>
+      <Text dimColor>Referer：{session.pageUrl}</Text>
 
       <Newline />
-      <Text color="green">Stats</Text>
+      <Text color="green">统计</Text>
       <Text>
-        Views {formatCount(session.stats.views)}  Likes {formatCount(session.stats.likes)}  Danmaku {formatCount(session.stats.danmaku)}
+        播放 {formatCount(session.stats.views)}  点赞 {formatCount(session.stats.likes)}  弹幕 {formatCount(session.stats.danmaku)}
       </Text>
       <Text>
-        Coins {formatCount(session.stats.coins)}  Favorites {formatCount(session.stats.favorites)}  Shares {formatCount(session.stats.shares)}
+        投币 {formatCount(session.stats.coins)}  收藏 {formatCount(session.stats.favorites)}  分享 {formatCount(session.stats.shares)}
       </Text>
 
       {session.parts.length > 1 ? (
         <>
           <Newline />
-          <Text color="green">Parts</Text>
+          <Text color="green">分 P</Text>
           {session.parts.slice(0, 5).map((part) => (
             <Text key={part.cid}>
               P{part.page}  {part.part}
@@ -1306,12 +1365,12 @@ function Dashboard({
       ) : null}
 
       <Newline />
-      <Text color="green">Controls</Text>
-      <Text>{inspectOnly ? "j/k or arrows to change quality, r to reload, b to return home, q to quit." : "j/k or arrows to change quality, Enter/p to play, r to reload, b to return home, q to quit."}</Text>
+      <Text color="green">操作提示</Text>
+      <Text>{inspectOnly ? "用 `j/k` 或上下方向键切换清晰度，`r` 重新加载，`b` 返回首页，`q` 退出。" : "用 `j/k` 或上下方向键切换清晰度，回车或 `p` 播放，`r` 重新加载，`b` 返回首页，`q` 退出。"}</Text>
       {message ? <Text color="yellow">{message}</Text> : null}
       {lastPlan ? (
         <Text dimColor>
-          Last command: {lastPlan.command} {lastPlan.args.join(" ")}
+          上次命令：{lastPlan.command} {lastPlan.args.join(" ")}
         </Text>
       ) : null}
     </Box>
@@ -1385,7 +1444,7 @@ function updateAccountField(state: AccountFormState, field: AccountField, value:
 
 function formatAccountValue(mode: AccountInputMode, value: string): string {
   if (!value) {
-    return mode === "cookie" ? "paste your Cookie header here" : "./bilibili.cookies";
+    return mode === "cookie" ? "在这里粘贴 Cookie" : "./bilibili.cookies";
   }
 
   if (mode === "cookieFile") {
@@ -1414,7 +1473,7 @@ function formatDuration(seconds: number): string {
 
 function formatBitrate(value?: number): string {
   if (!value) {
-    return "n/a";
+    return "无";
   }
 
   return `${(value / 1000).toFixed(0)} kbps`;
@@ -1422,10 +1481,10 @@ function formatBitrate(value?: number): string {
 
 function formatCount(value?: number): string {
   if (value === undefined) {
-    return "n/a";
+    return "无";
   }
 
-  return new Intl.NumberFormat("en-US").format(value);
+  return new Intl.NumberFormat("zh-CN").format(value);
 }
 
 function nextVo(value: PlayerVo): PlayerVo {

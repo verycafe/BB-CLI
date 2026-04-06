@@ -22,24 +22,24 @@ export function detectPlayerSupport(preferredVo: PlayerVo = "auto"): PlayerSuppo
 
   if (preferredVo !== "auto") {
     resolvedVo = preferredVo;
-    notes.push(`VO forced to ${preferredVo}.`);
+    notes.push(`已强制使用 ${preferredVo} 输出模式。`);
   } else if (looksLikeKittyProtocolTerminal()) {
     resolvedVo = "kitty";
-    notes.push("Detected a kitty-protocol capable terminal.");
+    notes.push("检测到支持 kitty 协议的终端。");
   } else if (looksLikeSixelTerminal()) {
     resolvedVo = "sixel";
-    notes.push("Detected a terminal that may support sixel.");
+    notes.push("检测到可能支持 sixel 的终端。");
   } else {
     resolvedVo = "tct";
-    notes.push("Falling back to the Unicode TCT renderer.");
+    notes.push("已回退到 Unicode TCT 渲染器。");
   }
 
   if (!mpvInstalled) {
-    notes.push("mpv is not installed, so terminal-native playback is unavailable.");
+    notes.push("未安装 mpv，因此无法使用终端原生播放。");
   }
 
   if (!ffplayInstalled) {
-    notes.push("ffplay is not installed, so there is no windowed fallback player.");
+    notes.push("未安装 ffplay，因此没有外部窗口回退播放器。");
   }
 
   return {
@@ -54,6 +54,7 @@ export function detectPlayerSupport(preferredVo: PlayerVo = "auto"): PlayerSuppo
 export type LaunchOptions = {
   playerVo: PlayerVo;
   useFastProfile: boolean;
+  allowExternalPlayer: boolean;
 };
 
 export type LaunchPlan = {
@@ -98,6 +99,10 @@ export function buildLaunchPlan(
   }
 
   if (support.ffplayInstalled) {
+    if (!options.allowExternalPlayer) {
+      throw new Error("终端内播放必须依赖 mpv。请先安装 mpv；如果你明确接受弹出单独窗口，再使用 --external-player 允许 ffplay 回退。");
+    }
+
     return {
       player: "ffplay",
       command: "ffplay",
@@ -113,7 +118,7 @@ export function buildLaunchPlan(
     };
   }
 
-  throw new Error("Neither mpv nor ffplay is available on this machine.");
+  throw new Error("终端内播放必须依赖 mpv，而且当前机器上也没有可用的回退播放器。");
 }
 
 export async function launchPlayer(plan: LaunchPlan): Promise<number> {
@@ -144,7 +149,7 @@ function detectTerminalLabel(): string {
     process.env.COLORTERM,
   ].filter(Boolean);
 
-  return parts.join(" / ") || "unknown";
+  return parts.join(" / ") || "未知";
 }
 
 function looksLikeKittyProtocolTerminal(): boolean {
