@@ -1,4 +1,4 @@
-import type {RequestAccount, StreamVariant, VideoSession} from "./media-types.js";
+import type {MediaSearchResult, RequestAccount, StreamVariant, VideoSession} from "./media-types.js";
 
 export const BILIBILI_DESKTOP_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
@@ -78,6 +78,45 @@ type BiliPlayData = {
   };
 };
 
+type BiliSearchResultItem = {
+  bvid?: string;
+  arcurl?: string;
+  title?: string;
+  description?: string;
+  author?: string;
+  duration?: string;
+  play?: number;
+  pubdate?: number;
+};
+
+type BiliSearchResponse = {
+  code?: number;
+  message?: string;
+  data?: {
+    result?: BiliSearchResultItem[];
+  };
+};
+
+type BiliRecommendationResponse = {
+  code?: number;
+  message?: string;
+  data?: {
+    item?: Array<{
+      bvid?: string;
+      uri?: string;
+      title?: string;
+      duration?: number;
+      pubdate?: number;
+      owner?: {
+        name?: string;
+      };
+      stat?: {
+        view?: number;
+      };
+    }>;
+  };
+};
+
 export function normalizeVideoInput(input: string): string {
   const trimmed = input.trim();
   if (!trimmed) {
@@ -113,6 +152,91 @@ export async function fetchVideoSession(input: string, account?: RequestAccount)
   return buildVideoSession(pageUrl, playInfo.data, initialState.videoData);
 }
 
+export async function searchVideos(query: string, account?: RequestAccount): Promise<MediaSearchResult[]> {
+  const params = new URLSearchParams({
+    search_type: "video",
+    keyword: query.trim(),
+    page: "1",
+    page_size: "10",
+  });
+  const url = `https://api.bilibili.com/x/web-interface/search/type?${params.toString()}`;
+  const response = await fetch(url, {
+    headers: {
+      "user-agent": BILIBILI_DESKTOP_USER_AGENT,
+      "accept-language": "zh-CN,zh;q=0.9,en;q=0.7",
+      referer: `${BILIBILI_SOURCE_ORIGIN}/`,
+      origin: BILIBILI_SOURCE_ORIGIN,
+      ...buildBilibiliRequestHeaders(account),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Bilibili search failed with HTTP ${response.status} ${response.statusText}.`);
+  }
+
+  const payload = (await response.json()) as BiliSearchResponse;
+  if (payload.code !== 0) {
+    throw new Error(`Bilibili search failed: ${payload.message ?? `code ${payload.code ?? "unknown"}`}`);
+  }
+
+  return (payload.data?.result ?? [])
+    .map((item) => buildSearchResult(item))
+    .filter((item): item is MediaSearchResult => item !== undefined);
+}
+
+export async function fetchRecommendedVideos(account?: RequestAccount): Promise<MediaSearchResult[]> {
+  const params = new URLSearchParams({
+    fresh_type: "4",
+    ps: "12",
+    fresh_idx: "1",
+    fresh_idx_1h: "1",
+    version: "1",
+    feed_version: "V8",
+    homepage_ver: "1",
+  });
+  const url = `https://api.bilibili.com/x/web-interface/index/top/feed/rcmd?${params.toString()}`;
+  const response = await fetch(url, {
+    headers: {
+      "user-agent": BILIBILI_DESKTOP_USER_AGENT,
+      "accept-language": "zh-CN,zh;q=0.9,en;q=0.7",
+      referer: `${BILIBILI_SOURCE_ORIGIN}/`,
+      origin: BILIBILI_SOURCE_ORIGIN,
+      ...buildBilibiliRequestHeaders(account),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Bilibili recommendations failed with HTTP ${response.status} ${response.statusText}.`);
+  }
+
+  const payload = (await response.json()) as BiliRecommendationResponse;
+  if (payload.code !== 0) {
+    throw new Error(`Bilibili recommendations failed: ${payload.message ?? `code ${payload.code ?? "unknown"}`}`);
+  }
+
+  const results: MediaSearchResult[] = [];
+  for (const item of payload.data?.item ?? []) {
+      const bvid = item.bvid ?? item.uri?.match(/BV[0-9A-Za-z]+/i)?.[0];
+      if (!bvid) {
+        continue;
+      }
+
+      results.push({
+        providerId: "bilibili",
+        providerLabel: "Bilibili",
+        title: cleanSearchText(item.title) || bvid,
+        ownerName: cleanSearchText(item.owner?.name) || "Unknown uploader",
+        durationSeconds: item.duration,
+        viewCount: item.stat?.view,
+        publishedAt: item.pubdate ? new Date(item.pubdate * 1000).toISOString() : undefined,
+        targetInput: bvid,
+        pageUrl: `${BILIBILI_SOURCE_ORIGIN}/video/${bvid}/`,
+      });
+  }
+
+  return results;
+}
+
 type BiliPlayDataEnvelope = {
   data: BiliPlayData;
 };
@@ -122,17 +246,12 @@ type BiliInitialState = {
 };
 
 async function fetchHtml(url: string, account?: RequestAccount): Promise<string> {
-  const accountHeaders =
-    account && account.provider === "bilibili"
-      ? normalizeRequestHeaders(account.headers)
-      : {};
-
   const response = await fetch(url, {
     headers: {
       "user-agent": BILIBILI_DESKTOP_USER_AGENT,
       "accept-language": "zh-CN,zh;q=0.9,en;q=0.7",
       referer: BILIBILI_SOURCE_ORIGIN,
-      ...accountHeaders,
+      ...buildBilibiliRequestHeaders(account),
     },
   });
 
@@ -141,6 +260,14 @@ async function fetchHtml(url: string, account?: RequestAccount): Promise<string>
   }
 
   return response.text();
+}
+
+function buildBilibiliRequestHeaders(account?: RequestAccount): Record<string, string> {
+  if (!account || account.provider !== "bilibili") {
+    return {};
+  }
+
+  return normalizeRequestHeaders(account.headers);
 }
 
 function normalizeRequestHeaders(headers: Record<string, string>): Record<string, string> {
@@ -355,4 +482,76 @@ function extractJsonObject<T>(html: string, marker: string): T {
   }
 
   throw new Error(`Unterminated JSON object for ${marker}.`);
+}
+
+function buildSearchResult(item: BiliSearchResultItem): MediaSearchResult | undefined {
+  const bvid = extractBvid(item);
+  if (!bvid) {
+    return undefined;
+  }
+
+  const pageUrl = `${BILIBILI_SOURCE_ORIGIN}/video/${bvid}/`;
+  return {
+    providerId: "bilibili",
+    providerLabel: "Bilibili",
+    title: cleanSearchText(item.title) || bvid,
+    description: cleanSearchText(item.description),
+    ownerName: cleanSearchText(item.author) || "Unknown uploader",
+    durationSeconds: parseDurationText(item.duration),
+    viewCount: item.play,
+    publishedAt: item.pubdate ? new Date(item.pubdate * 1000).toISOString() : undefined,
+    targetInput: bvid,
+    pageUrl,
+  };
+}
+
+function extractBvid(item: BiliSearchResultItem): string | undefined {
+  if (item.bvid && /^BV[0-9A-Za-z]+$/i.test(item.bvid)) {
+    return item.bvid;
+  }
+
+  const arcurl = item.arcurl ?? "";
+  const match = arcurl.match(/BV[0-9A-Za-z]+/i);
+  return match?.[0];
+}
+
+function cleanSearchText(value: string | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  return value
+    .replace(/<[^>]+>/g, "")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseDurationText(value: string | undefined): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const parts = value
+    .split(":")
+    .map((part) => Number.parseInt(part, 10))
+    .filter((part) => !Number.isNaN(part));
+
+  if (parts.length === 0) {
+    return undefined;
+  }
+
+  if (parts.length === 3) {
+    return parts[0]! * 3600 + parts[1]! * 60 + parts[2]!;
+  }
+
+  if (parts.length === 2) {
+    return parts[0]! * 60 + parts[1]!;
+  }
+
+  return parts[0];
 }

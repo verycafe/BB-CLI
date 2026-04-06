@@ -46,3 +46,16 @@ export type RequestAccount = {
   name: string;
   headers: Record<string, string>;
 };
+
+export type MediaSearchResult = {
+  providerId: string;
+  providerLabel: string;
+  title: string;
+  description?: string;
+  ownerName: string;
+  durationSeconds?: number;
+  viewCount?: number;
+  publishedAt?: string;
+  targetInput: string;
+  pageUrl: string;
+};

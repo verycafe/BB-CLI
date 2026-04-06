@@ -1,5 +1,5 @@
 import {buildAccountStorePath, listAccounts} from "./accounts.js";
-import type {RequestAccount, VideoSession} from "./media-types.js";
+import type {MediaSearchResult, RequestAccount, VideoSession} from "./media-types.js";
 import {bilibiliProvider} from "../providers/bilibili.js";
 import type {
   MediaProvider,
@@ -121,6 +121,55 @@ export async function loadMediaSession(target: MediaTarget, account?: RequestAcc
   }
 
   return provider.loadSession(target.normalizedInput, account);
+}
+
+export async function searchMedia(query: string, providerId?: string, account?: RequestAccount): Promise<MediaSearchResult[]> {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    throw new Error("Please enter a search query.");
+  }
+
+  if (providerId) {
+    const provider = getBuiltInProvider(providerId);
+    if (!provider) {
+      throw new Error(`Unknown built-in provider "${providerId}".`);
+    }
+
+    if (!provider.search) {
+      throw new Error(`Provider "${providerId}" does not support media search yet.`);
+    }
+
+    return provider.search(trimmed, account);
+  }
+
+  const searchableProvider = BUILT_IN_PROVIDERS.find((provider) => provider.search);
+  if (!searchableProvider) {
+    throw new Error("No searchable provider is available yet.");
+  }
+
+  return searchableProvider.search!(trimmed, account);
+}
+
+export async function listRecommendedMedia(providerId?: string, account?: RequestAccount): Promise<MediaSearchResult[]> {
+  if (providerId) {
+    const provider = getBuiltInProvider(providerId);
+    if (!provider) {
+      throw new Error(`Unknown built-in provider "${providerId}".`);
+    }
+
+    if (!provider.getRecommendations) {
+      throw new Error(`Provider "${providerId}" does not expose recommendations yet.`);
+    }
+
+    return provider.getRecommendations(account);
+  }
+
+  const provider = BUILT_IN_PROVIDERS.find((entry) => entry.getRecommendations);
+  if (!provider) {
+    throw new Error("No provider exposes recommendations yet.");
+  }
+
+  return provider.getRecommendations!(account);
 }
 
 export function validateProviderAccountHeaders(providerId: string, headers: Record<string, string>): void {

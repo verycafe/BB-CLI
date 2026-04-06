@@ -6,12 +6,14 @@ import meow from "meow";
 import App from "./app.js";
 import {runAccountCommand, type AccountCommand} from "./lib/account-cli.js";
 import {buildHeadersFromAccount, resolveAccount} from "./lib/accounts.js";
+import type {RequestAccount} from "./lib/media-types.js";
 import type {PlayerVo} from "./lib/player.js";
-import {printProvidersSummary, resolveMediaTarget} from "./lib/providers.js";
+import {loadMediaSession, printProvidersSummary, resolveMediaTarget, type MediaTarget} from "./lib/providers.js";
 
 const cli = meow(
   `
   Usage
+    $ bbcli
     $ bbcli <bilibili-url-or-bvid>
     $ bbcli providers [id]
     $ bbcli account <bind|list|show|use|remove|check> ...
@@ -34,6 +36,7 @@ const cli = meow(
     --default     Make the bound account the provider default
 
   Examples
+    $ bbcli
     $ bbcli BV17PYqerEtA
     $ bbcli https://www.bilibili.com/video/BV17PYqerEtA/
     $ bbcli BV17PYqerEtA --vo=kitty
@@ -144,17 +147,16 @@ async function main(): Promise<void> {
   }
 
   const mediaInput = cli.input[0];
+  if (!mediaInput && !process.stdin.isTTY) {
+    printNonInteractiveHelp();
+    return;
+  }
+
   const target = mediaInput ? resolveMediaTarget(mediaInput, cli.flags.provider) : undefined;
-  const selectedAccount = target
-    ? await resolveAccount(target.providerId, cli.flags.account)
-    : undefined;
-  const requestAccount = selectedAccount
-    ? {
-        provider: selectedAccount.account.provider,
-        name: selectedAccount.account.name,
-        headers: buildHeadersFromAccount(selectedAccount.account),
-      }
-    : undefined;
+  if (target && !process.stdin.isTTY) {
+    await printNonInteractiveSession(target, cli.flags.account, cli.flags.inspect);
+    return;
+  }
 
   render(
     <App
@@ -162,7 +164,8 @@ async function main(): Promise<void> {
       inspectOnly={cli.flags.inspect}
       preferredVo={vo}
       useFastProfile={cli.flags.fast}
-      account={requestAccount}
+      selectedAccountName={cli.flags.account}
+      providerOverride={cli.flags.provider}
     />,
   );
 }
@@ -179,4 +182,62 @@ function handleCliError(error: unknown): never {
   const message = error instanceof Error ? error.message : String(error);
   console.error(`bbcli: ${message}`);
   process.exit(1);
+}
+
+function printNonInteractiveHelp(): void {
+  console.log("BBCLI");
+  console.log("Run `bbcli` in an interactive terminal to open the default launcher.");
+  console.log("");
+  console.log("Direct playback:");
+  console.log("  bbcli BV17PYqerEtA");
+  console.log("  bbcli https://www.bilibili.com/video/BV17PYqerEtA/");
+  console.log("");
+  console.log("Useful commands:");
+  console.log("  bbcli providers");
+  console.log("  bbcli account list");
+}
+
+async function printNonInteractiveSession(target: MediaTarget, selectedAccountName: string | undefined, inspectOnly: boolean): Promise<void> {
+  const account = await buildRequestAccount(target.providerId, selectedAccountName);
+  const session = await loadMediaSession(target, account);
+  const selectedVariant = session.variants[0];
+
+  console.log("BBCLI");
+  console.log(session.title);
+  console.log(`${session.ownerName} | ${session.bvid} | ${formatDuration(session.durationSeconds)}`);
+  console.log(`Provider: ${target.providerLabel}`);
+  if (account) {
+    console.log(`Account: ${account.provider}:${account.name}`);
+  }
+  console.log(`Recommended stream: ${selectedVariant?.label ?? "n/a"} | ${selectedVariant?.codecLabel ?? "n/a"}`);
+  console.log(`Page: ${session.pageUrl}`);
+  if (!inspectOnly) {
+    console.log("Playback was skipped because BBCLI is running without an interactive terminal.");
+  }
+}
+
+async function buildRequestAccount(providerId: string, selectedAccountName?: string): Promise<RequestAccount | undefined> {
+  const resolved = await resolveAccount(providerId, selectedAccountName);
+  if (!resolved) {
+    return undefined;
+  }
+
+  return {
+    provider: resolved.account.provider,
+    name: resolved.account.name,
+    headers: buildHeadersFromAccount(resolved.account),
+  };
+}
+
+function formatDuration(seconds: number): string {
+  const total = Math.max(0, seconds);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const remainingSeconds = total % 60;
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
+  }
+
+  return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
 }

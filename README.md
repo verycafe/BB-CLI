@@ -2,13 +2,14 @@
 
 `BBCLI` is a `Node + Ink` terminal client for public and account-backed media workflows.
 
-It currently does three things:
+It currently does these things:
 
-- fetches the public video page
-- extracts `window.__playinfo__` and `window.__INITIAL_STATE__`
+- opens an interactive `bbcli` home screen instead of forcing subcommands as the primary entry
+- shows Bilibili homepage recommendations by default
+- searches Bilibili videos from inside the Ink UI
+- opens selected videos and extracts `window.__playinfo__` and `window.__INITIAL_STATE__`
 - launches playback through `mpv` terminal video outputs with the priority `kitty -> sixel -> tct`
-- stores provider-scoped account bindings for future multi-platform integrations
-- routes media input through a provider registry instead of a single hardcoded site path
+- binds provider-scoped accounts from the same Ink launcher or through CLI commands
 
 ## Requirements
 
@@ -59,20 +60,34 @@ npm install
 ## Run
 
 ```bash
-npm run dev -- BV17PYqerEtA
-bbcli providers
+npm run dev
+bbcli
 ```
 
 Or build first:
 
 ```bash
 npm run build
-npm start -- BV17PYqerEtA
+npm start --
 ```
+
+The primary flow is now:
+
+```bash
+bbcli
+```
+
+From there you can:
+
+- browse Bilibili homepage recommendations
+- type to jump straight into search
+- press `3` to bind a Bilibili account inside the Ink UI
+- press `Enter` on a selected result to open it
 
 ## Useful flags
 
 ```bash
+bbcli
 bbcli BV17PYqerEtA --inspect
 bbcli BV17PYqerEtA --vo=kitty
 bbcli BV17PYqerEtA --vo=sixel
@@ -89,6 +104,20 @@ Accounts are stored per provider and per name in a local config file:
 ```bash
 ~/.config/bbcli/accounts.json
 ```
+
+The easiest path is now inside the launcher:
+
+```bash
+bbcli
+```
+
+Then press `3` and fill in:
+
+- account name
+- Cookie text or cookie file path
+- optional note
+
+You can still bind accounts from the command line too.
 
 Bind a Bilibili account from an existing cookie string:
 
@@ -135,6 +164,7 @@ bbcli providers bilibili
 ## Notes
 
 - Bilibili stream URLs are signed and expire, so the CLI resolves them fresh from the page each run.
+- `bbcli` now treats recommendations and search as the main Bilibili entry path. BV ids and direct URLs still work, but they are no longer the only practical way in.
 - `kitty` and `sixel` need a terminal that supports those graphics protocols.
 - `tct` is the Unicode fallback when no graphics protocol is detected.
 - The one-line installer understands `BBCLI_INSTALL_MODE=auto|release|archive`, `BBCLI_INSTALL_REF`, and `BBCLI_PREFIX`.

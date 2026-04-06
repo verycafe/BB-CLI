@@ -1,4 +1,4 @@
-import { BILIBILI_DESKTOP_USER_AGENT, BILIBILI_SOURCE_ORIGIN, fetchVideoSession, normalizeVideoInput, } from "../lib/bilibili.js";
+import { BILIBILI_DESKTOP_USER_AGENT, BILIBILI_SOURCE_ORIGIN, fetchVideoSession, fetchRecommendedVideos, normalizeVideoInput, searchVideos, } from "../lib/bilibili.js";
 import { parseCookieHeader } from "../lib/cookies.js";
 export const bilibiliProvider = {
     descriptor: {
@@ -40,6 +40,12 @@ export const bilibiliProvider = {
     },
     async loadSession(normalizedInput, account) {
         return fetchVideoSession(normalizedInput, account);
+    },
+    async search(query, account) {
+        return searchVideos(query, account);
+    },
+    async getRecommendations(account) {
+        return fetchRecommendedVideos(account);
     },
     validateAccountHeaders(headers) {
         if (!headers.Cookie) {

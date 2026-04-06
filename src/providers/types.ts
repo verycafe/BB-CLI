@@ -1,4 +1,4 @@
-import type {RequestAccount, VideoSession} from "../lib/media-types.js";
+import type {MediaSearchResult, RequestAccount, VideoSession} from "../lib/media-types.js";
 
 export type ProviderAccountField = {
   key: string;
@@ -41,6 +41,8 @@ export type MediaProvider = {
   detect(input: string): boolean;
   normalizeInput(input: string): string;
   loadSession(normalizedInput: string, account?: RequestAccount): Promise<VideoSession>;
+  search?(query: string, account?: RequestAccount): Promise<MediaSearchResult[]>;
+  getRecommendations?(account?: RequestAccount): Promise<MediaSearchResult[]>;
   validateAccountHeaders?(headers: Record<string, string>): void;
   inspectAccountHeaders?(headers: Record<string, string>): ProviderAccountDiagnostic[];
   checkAccountRemotely?(account: RequestAccount): Promise<ProviderAccountCheckResult>;

@@ -2,7 +2,9 @@ import {
   BILIBILI_DESKTOP_USER_AGENT,
   BILIBILI_SOURCE_ORIGIN,
   fetchVideoSession,
+  fetchRecommendedVideos,
   normalizeVideoInput,
+  searchVideos,
 } from "../lib/bilibili.js";
 import {parseCookieHeader} from "../lib/cookies.js";
 import type {MediaProvider} from "./types.js";
@@ -47,6 +49,12 @@ export const bilibiliProvider: MediaProvider = {
   },
   async loadSession(normalizedInput, account) {
     return fetchVideoSession(normalizedInput, account);
+  },
+  async search(query, account) {
+    return searchVideos(query, account);
+  },
+  async getRecommendations(account) {
+    return fetchRecommendedVideos(account);
   },
   validateAccountHeaders(headers) {
     if (!headers.Cookie) {
