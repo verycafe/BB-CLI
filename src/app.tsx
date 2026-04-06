@@ -83,6 +83,26 @@ type SearchState = {
 type AccountField = "name" | "value" | "note";
 type AccountInputMode = "cookie" | "cookieFile";
 type AccountMessageTone = "success" | "warning" | "error" | "info";
+type HomeMenuItemStatus = "live" | "planned";
+type HomeMenuItemAction =
+  | {
+      type: "open-workspace";
+      tab: HomeTab;
+      message?: string;
+      query?: string;
+    }
+  | {
+      type: "planned";
+      message: string;
+    };
+
+type HomeMenuItem = {
+  id: string;
+  label: string;
+  note: string;
+  status: HomeMenuItemStatus;
+  action: HomeMenuItemAction;
+};
 
 type AccountFormState = {
   activeField: AccountField;
@@ -102,46 +122,156 @@ const HOME_TABS: Array<{
   id: HomeTab;
   label: string;
   summary: string;
-  highlights: string[];
+  items: HomeMenuItem[];
 }> = [
   {
     id: "discover",
     label: "发现",
     summary: "推荐视频与内容入口。",
-    highlights: [
-      "哔哩哔哩首页推荐",
-      "后续接入 YouTube / Instagram",
-      "回车进入内容流",
+    items: [
+      {
+        id: "discover-bilibili-home",
+        label: "哔哩哔哩首页推荐",
+        note: "直接进入当前可用的推荐视频流。",
+        status: "live",
+        action: {
+          type: "open-workspace",
+          tab: "discover",
+        },
+      },
+      {
+        id: "discover-youtube-home",
+        label: "YouTube 首页流",
+        note: "后续会接订阅、Shorts 和首页推荐。",
+        status: "planned",
+        action: {
+          type: "planned",
+          message: "YouTube 首页流还在规划中，先用“发现”里的哔哩哔哩推荐。",
+        },
+      },
+      {
+        id: "discover-instagram-timeline",
+        label: "Instagram 时间线",
+        note: "后续会接创作者时间线和短视频入口。",
+        status: "planned",
+        action: {
+          type: "planned",
+          message: "Instagram 时间线还在规划中。",
+        },
+      },
     ],
   },
   {
     id: "search",
     label: "搜索",
     summary: "搜索视频、链接与未来多平台内容。",
-    highlights: [
-      "关键词搜索",
-      "粘贴链接直接打开",
-      "后续接入 Google / 本地文件",
+    items: [
+      {
+        id: "search-keyword",
+        label: "关键词搜索",
+        note: "输入关键词后回车，查看哔哩哔哩结果。",
+        status: "live",
+        action: {
+          type: "open-workspace",
+          tab: "search",
+          message: "输入关键词后按回车搜索。",
+        },
+      },
+      {
+        id: "search-link",
+        label: "粘贴链接直接打开",
+        note: "粘贴哔哩哔哩视频链接后回车。",
+        status: "live",
+        action: {
+          type: "open-workspace",
+          tab: "search",
+          message: "粘贴链接后按回车，BBCLI 会优先尝试直接打开。",
+        },
+      },
+      {
+        id: "search-google",
+        label: "Google 搜索",
+        note: "后续会接网页搜索和快速跳转。",
+        status: "planned",
+        action: {
+          type: "planned",
+          message: "Google 搜索还在规划中，当前先支持哔哩哔哩搜索。",
+        },
+      },
     ],
   },
   {
     id: "library",
     label: "书库",
     summary: "阅读、本地文件与收藏内容。",
-    highlights: [
-      "微信读书",
-      "本地 EPUB / PDF",
-      "收藏与历史记录",
+    items: [
+      {
+        id: "library-home",
+        label: "进入书库",
+        note: "查看书库来源和未来的阅读入口。",
+        status: "live",
+        action: {
+          type: "open-workspace",
+          tab: "library",
+        },
+      },
+      {
+        id: "library-weread",
+        label: "微信读书",
+        note: "后续会接书架、进度和划线。",
+        status: "planned",
+        action: {
+          type: "planned",
+          message: "微信读书还在规划中，当前书库主要是结构入口。",
+        },
+      },
+      {
+        id: "library-local-books",
+        label: "本地 EPUB / PDF",
+        note: "后续会接本地阅读和续读位置。",
+        status: "planned",
+        action: {
+          type: "planned",
+          message: "本地 EPUB / PDF 阅读还在规划中。",
+        },
+      },
     ],
   },
   {
     id: "accounts",
     label: "账号",
     summary: "绑定平台账号与身份。",
-    highlights: [
-      "哔哩哔哩账号",
-      "后续支持更多平台",
-      "管理默认身份",
+    items: [
+      {
+        id: "accounts-bilibili",
+        label: "绑定哔哩哔哩账号",
+        note: "进入账号页，填写 Cookie 或 Cookie 文件。",
+        status: "live",
+        action: {
+          type: "open-workspace",
+          tab: "accounts",
+        },
+      },
+      {
+        id: "accounts-weread",
+        label: "微信读书账号",
+        note: "后续会接阅读身份和书架同步。",
+        status: "planned",
+        action: {
+          type: "planned",
+          message: "微信读书账号接入还在规划中。",
+        },
+      },
+      {
+        id: "accounts-youtube-instagram",
+        label: "YouTube / Instagram",
+        note: "后续会接创作者、订阅和媒体账号。",
+        status: "planned",
+        action: {
+          type: "planned",
+          message: "YouTube / Instagram 账号接入还在规划中。",
+        },
+      },
     ],
   },
 ];
@@ -180,6 +310,8 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
   const [homeTab, setHomeTab] = useState<HomeTab>("discover");
   const [homeView, setHomeView] = useState<HomeView>("menu");
   const [homeMenuIndex, setHomeMenuIndex] = useState(0);
+  const [homeMenuItemIndex, setHomeMenuItemIndex] = useState(0);
+  const [homeMenuMessage, setHomeMenuMessage] = useState<string | undefined>();
   const [selectedAccountProviderId, setSelectedAccountProviderId] = useState(
     providerOverride ?? defaultAccountProvider?.id ?? homeMediaProviderId,
   );
@@ -212,6 +344,17 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
 
     setSelectedAccountProviderId(defaultAccountProvider?.id ?? homeMediaProviderId);
   }, [accountProviderIdsKey, defaultAccountProvider?.id, homeMediaProviderId, providerOverride, selectedAccountProviderId]);
+
+  useEffect(() => {
+    setHomeMenuItemIndex((current) => {
+      const itemCount = HOME_TABS[homeMenuIndex]?.items.length ?? 0;
+      if (itemCount <= 0) {
+        return 0;
+      }
+
+      return Math.min(current, itemCount - 1);
+    });
+  }, [homeMenuIndex]);
 
   useEffect(() => {
     let cancelled = false;
@@ -564,28 +707,35 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
   function handleHomeMenuInput(inputKey: string, key: Key): void {
     if (key.leftArrow || inputKey === "h") {
       setHomeMenuIndex((current) => (current - 1 + HOME_TABS.length) % HOME_TABS.length);
+      setHomeMenuItemIndex(0);
+      setHomeMenuMessage(undefined);
       return;
     }
 
     if (key.rightArrow || inputKey === "l") {
       setHomeMenuIndex((current) => (current + 1) % HOME_TABS.length);
+      setHomeMenuItemIndex(0);
+      setHomeMenuMessage(undefined);
       return;
     }
 
     if (key.upArrow || inputKey === "k") {
-      setHomeMenuIndex((current) => Math.max(0, current - 1));
+      setHomeMenuItemIndex((current) => Math.max(0, current - 1));
+      setHomeMenuMessage(undefined);
       return;
     }
 
     if (key.downArrow || inputKey === "j") {
-      setHomeMenuIndex((current) => Math.min(HOME_TABS.length - 1, current + 1));
+      const itemCount = HOME_TABS[homeMenuIndex]?.items.length ?? 0;
+      setHomeMenuItemIndex((current) => Math.min(Math.max(0, itemCount - 1), current + 1));
+      setHomeMenuMessage(undefined);
       return;
     }
 
     if (key.return) {
-      const nextTab = HOME_TABS[homeMenuIndex]?.id;
-      if (nextTab) {
-        openHomeWorkspace(nextTab);
+      const nextItem = HOME_TABS[homeMenuIndex]?.items[homeMenuItemIndex];
+      if (nextItem) {
+        runHomeMenuItem(nextItem);
       }
       return;
     }
@@ -596,6 +746,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
         ...current,
         message: "输入关键词，或粘贴哔哩哔哩链接后按回车。",
       }));
+      setHomeMenuMessage(undefined);
       return;
     }
 
@@ -606,6 +757,30 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
         query: current.query + inputKey.replace(/[\r\n]+/g, ""),
         message: undefined,
       }));
+      setHomeMenuMessage(undefined);
+    }
+  }
+
+  function runHomeMenuItem(item: HomeMenuItem): void {
+    const action = item.action;
+
+    if (action.type === "planned") {
+      setHomeMenuMessage(action.message);
+      return;
+    }
+
+    setHomeMenuMessage(undefined);
+    openHomeWorkspace(action.tab);
+
+    if (action.tab === "search") {
+      setSearch((current) => ({
+        ...current,
+        query: action.query ?? "",
+        lastRunQuery: undefined,
+        results: [],
+        selectedIndex: 0,
+        message: action.message,
+      }));
     }
   }
 
@@ -615,6 +790,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
     if (nextIndex >= 0) {
       setHomeMenuIndex(nextIndex);
     }
+    setHomeMenuMessage(undefined);
     setHomeView("workspace");
   }
 
@@ -976,6 +1152,8 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
           view={homeView}
           tab={homeTab}
           menuIndex={homeMenuIndex}
+          menuItemIndex={homeMenuItemIndex}
+          menuMessage={homeMenuMessage}
           providerLabel={homeMediaProvider?.label ?? homeMediaProviderId}
           inspectOnly={launchInspectOnly}
           providers={providerSummaries}
@@ -1037,6 +1215,8 @@ function HomeScreen({
   view,
   tab,
   menuIndex,
+  menuItemIndex,
+  menuMessage,
   providerLabel,
   inspectOnly,
   providers,
@@ -1050,6 +1230,8 @@ function HomeScreen({
   view: HomeView;
   tab: HomeTab;
   menuIndex: number;
+  menuItemIndex: number;
+  menuMessage?: string;
   providerLabel: string;
   inspectOnly: boolean;
   providers: HomeProviderSummary[];
@@ -1078,7 +1260,7 @@ function HomeScreen({
       />
       <Newline />
 
-      {view === "menu" ? <MenuScreen selectedIndex={menuIndex} /> : null}
+      {view === "menu" ? <MenuScreen selectedIndex={menuIndex} selectedItemIndex={menuItemIndex} message={menuMessage} /> : null}
       {view === "workspace" ? <WorkspaceHeader tab={tab} providerLabel={activeLaneLabel} /> : null}
       {view === "workspace" ? <Newline /> : null}
       {view === "workspace" && tab === "discover" ? <RecommendationPanel state={recommendations} /> : null}
@@ -1088,7 +1270,7 @@ function HomeScreen({
 
       <Newline />
       {!isInteractive ? <Text dimColor>当前终端不支持交互输入，请在正常终端里运行 BBCLI。</Text> : null}
-      {isInteractive && view === "menu" ? <Text dimColor>{`${activeMenu?.label ?? "菜单"}  ·  ← → 切换  ·  Enter 进入  ·  直接输入可搜索`}</Text> : null}
+      {isInteractive && view === "menu" ? <Text dimColor>{`${activeMenu?.label ?? "菜单"}  ·  ← → 切分类  ·  ↑↓ 选入口  ·  Enter 进入  ·  直接输入可搜索`}</Text> : null}
       {isInteractive && view === "workspace" && tab === "discover" ? <Text dimColor>↑↓ 选视频  ·  Enter 打开  ·  r 刷新  ·  b 返回</Text> : null}
       {isInteractive && view === "workspace" && tab === "search" ? <Text dimColor>输入后回车  ·  ↑↓ 选结果  ·  Esc 返回</Text> : null}
       {isInteractive && view === "workspace" && tab === "library" ? <Text dimColor>Esc 或 b 返回</Text> : null}
@@ -1097,8 +1279,17 @@ function HomeScreen({
   );
 }
 
-function MenuScreen({selectedIndex}: {selectedIndex: number}) {
+function MenuScreen({
+  selectedIndex,
+  selectedItemIndex,
+  message,
+}: {
+  selectedIndex: number;
+  selectedItemIndex: number;
+  message?: string;
+}) {
   const activeItem = HOME_TABS[selectedIndex]!;
+  const activeMenuItem = activeItem.items[selectedItemIndex];
 
   return (
     <Box flexDirection="column">
@@ -1122,9 +1313,40 @@ function MenuScreen({selectedIndex}: {selectedIndex: number}) {
       <Newline />
       <Text bold>{activeItem.summary}</Text>
       <Newline />
-      {activeItem.highlights.map((line, index) => (
-        <Text key={`${activeItem.id}-${index}`} dimColor>{`${index === 0 ? ">" : "·"} ${line}`}</Text>
-      ))}
+      <Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1}>
+        {activeItem.items.map((item, index) => {
+          const selected = index === selectedItemIndex;
+          return (
+            <Box key={item.id} flexDirection="column" marginBottom={index < activeItem.items.length - 1 ? 1 : 0}>
+              <Box>
+                <Text color={selected ? "yellow" : "gray"}>{selected ? ">" : " "}</Text>
+                <Text> </Text>
+                <Text
+                  backgroundColor={selected ? "cyan" : undefined}
+                  color={selected ? "black" : undefined}
+                  bold={selected}
+                >
+                  {` ${item.label} `}
+                </Text>
+                <Text> </Text>
+                <InlinePill label={item.status === "live" ? "可用" : "规划中"} tone={item.status === "live" ? "green" : "gray"} />
+              </Box>
+              <Text dimColor>{`  ${item.note}`}</Text>
+            </Box>
+          );
+        })}
+      </Box>
+      {message ? (
+        <>
+          <Newline />
+          <Text color="yellow">{message}</Text>
+        </>
+      ) : activeMenuItem ? (
+        <>
+          <Newline />
+          <Text dimColor>{`当前入口：${activeMenuItem.label}`}</Text>
+        </>
+      ) : null}
     </Box>
   );
 }

@@ -12,40 +12,150 @@ const HOME_TABS = [
         id: "discover",
         label: "发现",
         summary: "推荐视频与内容入口。",
-        highlights: [
-            "哔哩哔哩首页推荐",
-            "后续接入 YouTube / Instagram",
-            "回车进入内容流",
+        items: [
+            {
+                id: "discover-bilibili-home",
+                label: "哔哩哔哩首页推荐",
+                note: "直接进入当前可用的推荐视频流。",
+                status: "live",
+                action: {
+                    type: "open-workspace",
+                    tab: "discover",
+                },
+            },
+            {
+                id: "discover-youtube-home",
+                label: "YouTube 首页流",
+                note: "后续会接订阅、Shorts 和首页推荐。",
+                status: "planned",
+                action: {
+                    type: "planned",
+                    message: "YouTube 首页流还在规划中，先用“发现”里的哔哩哔哩推荐。",
+                },
+            },
+            {
+                id: "discover-instagram-timeline",
+                label: "Instagram 时间线",
+                note: "后续会接创作者时间线和短视频入口。",
+                status: "planned",
+                action: {
+                    type: "planned",
+                    message: "Instagram 时间线还在规划中。",
+                },
+            },
         ],
     },
     {
         id: "search",
         label: "搜索",
         summary: "搜索视频、链接与未来多平台内容。",
-        highlights: [
-            "关键词搜索",
-            "粘贴链接直接打开",
-            "后续接入 Google / 本地文件",
+        items: [
+            {
+                id: "search-keyword",
+                label: "关键词搜索",
+                note: "输入关键词后回车，查看哔哩哔哩结果。",
+                status: "live",
+                action: {
+                    type: "open-workspace",
+                    tab: "search",
+                    message: "输入关键词后按回车搜索。",
+                },
+            },
+            {
+                id: "search-link",
+                label: "粘贴链接直接打开",
+                note: "粘贴哔哩哔哩视频链接后回车。",
+                status: "live",
+                action: {
+                    type: "open-workspace",
+                    tab: "search",
+                    message: "粘贴链接后按回车，BBCLI 会优先尝试直接打开。",
+                },
+            },
+            {
+                id: "search-google",
+                label: "Google 搜索",
+                note: "后续会接网页搜索和快速跳转。",
+                status: "planned",
+                action: {
+                    type: "planned",
+                    message: "Google 搜索还在规划中，当前先支持哔哩哔哩搜索。",
+                },
+            },
         ],
     },
     {
         id: "library",
         label: "书库",
         summary: "阅读、本地文件与收藏内容。",
-        highlights: [
-            "微信读书",
-            "本地 EPUB / PDF",
-            "收藏与历史记录",
+        items: [
+            {
+                id: "library-home",
+                label: "进入书库",
+                note: "查看书库来源和未来的阅读入口。",
+                status: "live",
+                action: {
+                    type: "open-workspace",
+                    tab: "library",
+                },
+            },
+            {
+                id: "library-weread",
+                label: "微信读书",
+                note: "后续会接书架、进度和划线。",
+                status: "planned",
+                action: {
+                    type: "planned",
+                    message: "微信读书还在规划中，当前书库主要是结构入口。",
+                },
+            },
+            {
+                id: "library-local-books",
+                label: "本地 EPUB / PDF",
+                note: "后续会接本地阅读和续读位置。",
+                status: "planned",
+                action: {
+                    type: "planned",
+                    message: "本地 EPUB / PDF 阅读还在规划中。",
+                },
+            },
         ],
     },
     {
         id: "accounts",
         label: "账号",
         summary: "绑定平台账号与身份。",
-        highlights: [
-            "哔哩哔哩账号",
-            "后续支持更多平台",
-            "管理默认身份",
+        items: [
+            {
+                id: "accounts-bilibili",
+                label: "绑定哔哩哔哩账号",
+                note: "进入账号页，填写 Cookie 或 Cookie 文件。",
+                status: "live",
+                action: {
+                    type: "open-workspace",
+                    tab: "accounts",
+                },
+            },
+            {
+                id: "accounts-weread",
+                label: "微信读书账号",
+                note: "后续会接阅读身份和书架同步。",
+                status: "planned",
+                action: {
+                    type: "planned",
+                    message: "微信读书账号接入还在规划中。",
+                },
+            },
+            {
+                id: "accounts-youtube-instagram",
+                label: "YouTube / Instagram",
+                note: "后续会接创作者、订阅和媒体账号。",
+                status: "planned",
+                action: {
+                    type: "planned",
+                    message: "YouTube / Instagram 账号接入还在规划中。",
+                },
+            },
         ],
     },
 ];
@@ -81,6 +191,8 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
     const [homeTab, setHomeTab] = useState("discover");
     const [homeView, setHomeView] = useState("menu");
     const [homeMenuIndex, setHomeMenuIndex] = useState(0);
+    const [homeMenuItemIndex, setHomeMenuItemIndex] = useState(0);
+    const [homeMenuMessage, setHomeMenuMessage] = useState();
     const [selectedAccountProviderId, setSelectedAccountProviderId] = useState(providerOverride ?? defaultAccountProvider?.id ?? homeMediaProviderId);
     const [providerSummaries, setProviderSummaries] = useState([]);
     const [recommendations, setRecommendations] = useState({
@@ -108,6 +220,15 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
         }
         setSelectedAccountProviderId(defaultAccountProvider?.id ?? homeMediaProviderId);
     }, [accountProviderIdsKey, defaultAccountProvider?.id, homeMediaProviderId, providerOverride, selectedAccountProviderId]);
+    useEffect(() => {
+        setHomeMenuItemIndex((current) => {
+            const itemCount = HOME_TABS[homeMenuIndex]?.items.length ?? 0;
+            if (itemCount <= 0) {
+                return 0;
+            }
+            return Math.min(current, itemCount - 1);
+        });
+    }, [homeMenuIndex]);
     useEffect(() => {
         let cancelled = false;
         void (async () => {
@@ -410,24 +531,31 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
     function handleHomeMenuInput(inputKey, key) {
         if (key.leftArrow || inputKey === "h") {
             setHomeMenuIndex((current) => (current - 1 + HOME_TABS.length) % HOME_TABS.length);
+            setHomeMenuItemIndex(0);
+            setHomeMenuMessage(undefined);
             return;
         }
         if (key.rightArrow || inputKey === "l") {
             setHomeMenuIndex((current) => (current + 1) % HOME_TABS.length);
+            setHomeMenuItemIndex(0);
+            setHomeMenuMessage(undefined);
             return;
         }
         if (key.upArrow || inputKey === "k") {
-            setHomeMenuIndex((current) => Math.max(0, current - 1));
+            setHomeMenuItemIndex((current) => Math.max(0, current - 1));
+            setHomeMenuMessage(undefined);
             return;
         }
         if (key.downArrow || inputKey === "j") {
-            setHomeMenuIndex((current) => Math.min(HOME_TABS.length - 1, current + 1));
+            const itemCount = HOME_TABS[homeMenuIndex]?.items.length ?? 0;
+            setHomeMenuItemIndex((current) => Math.min(Math.max(0, itemCount - 1), current + 1));
+            setHomeMenuMessage(undefined);
             return;
         }
         if (key.return) {
-            const nextTab = HOME_TABS[homeMenuIndex]?.id;
-            if (nextTab) {
-                openHomeWorkspace(nextTab);
+            const nextItem = HOME_TABS[homeMenuIndex]?.items[homeMenuItemIndex];
+            if (nextItem) {
+                runHomeMenuItem(nextItem);
             }
             return;
         }
@@ -437,6 +565,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
                 ...current,
                 message: "输入关键词，或粘贴哔哩哔哩链接后按回车。",
             }));
+            setHomeMenuMessage(undefined);
             return;
         }
         if (isPlainTextInput(inputKey, key)) {
@@ -446,6 +575,26 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
                 query: current.query + inputKey.replace(/[\r\n]+/g, ""),
                 message: undefined,
             }));
+            setHomeMenuMessage(undefined);
+        }
+    }
+    function runHomeMenuItem(item) {
+        const action = item.action;
+        if (action.type === "planned") {
+            setHomeMenuMessage(action.message);
+            return;
+        }
+        setHomeMenuMessage(undefined);
+        openHomeWorkspace(action.tab);
+        if (action.tab === "search") {
+            setSearch((current) => ({
+                ...current,
+                query: action.query ?? "",
+                lastRunQuery: undefined,
+                results: [],
+                selectedIndex: 0,
+                message: action.message,
+            }));
         }
     }
     function openHomeWorkspace(tab) {
@@ -454,6 +603,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
         if (nextIndex >= 0) {
             setHomeMenuIndex(nextIndex);
         }
+        setHomeMenuMessage(undefined);
         setHomeView("workspace");
     }
     function handleRecommendationInput(inputKey, key) {
@@ -766,7 +916,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
         }
     }
     if (state.status === "home") {
-        return (_jsxs(_Fragment, { children: [isRawModeSupported ? _jsx(InputController, { onInput: handleAppInput }) : null, _jsx(HomeScreen, { view: homeView, tab: homeTab, menuIndex: homeMenuIndex, providerLabel: homeMediaProvider?.label ?? homeMediaProviderId, inspectOnly: launchInspectOnly, providers: providerSummaries, recommendations: recommendations, search: search, accountForm: accountForm, accountProviderId: homeAccountProviderId, accountProviderLabel: homeAccountProvider?.label ?? homeAccountProviderId, isInteractive: isRawModeSupported })] }));
+        return (_jsxs(_Fragment, { children: [isRawModeSupported ? _jsx(InputController, { onInput: handleAppInput }) : null, _jsx(HomeScreen, { view: homeView, tab: homeTab, menuIndex: homeMenuIndex, menuItemIndex: homeMenuItemIndex, menuMessage: homeMenuMessage, providerLabel: homeMediaProvider?.label ?? homeMediaProviderId, inspectOnly: launchInspectOnly, providers: providerSummaries, recommendations: recommendations, search: search, accountForm: accountForm, accountProviderId: homeAccountProviderId, accountProviderLabel: homeAccountProvider?.label ?? homeAccountProviderId, isInteractive: isRawModeSupported })] }));
     }
     if (state.status === "loading") {
         return _jsx(LoadingScreen, { target: activeTarget });
@@ -783,7 +933,7 @@ function InputController({ onInput }) {
     useInput(onInput);
     return null;
 }
-function HomeScreen({ view, tab, menuIndex, providerLabel, inspectOnly, providers, recommendations, search, accountForm, accountProviderId, accountProviderLabel, isInteractive, }) {
+function HomeScreen({ view, tab, menuIndex, menuItemIndex, menuMessage, providerLabel, inspectOnly, providers, recommendations, search, accountForm, accountProviderId, accountProviderLabel, isInteractive, }) {
     const activeLaneLabel = view === "menu"
         ? "首页菜单"
         : tab === "accounts"
@@ -792,14 +942,18 @@ function HomeScreen({ view, tab, menuIndex, providerLabel, inspectOnly, provider
                 ? "个人书架"
                 : providerLabel;
     const activeMenu = HOME_TABS[menuIndex];
-    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(BrandHeader, { activeTab: view === "menu" ? undefined : tab, providerLabel: activeLaneLabel, inspectOnly: view === "workspace" ? inspectOnly : false }), _jsx(Newline, {}), view === "menu" ? _jsx(MenuScreen, { selectedIndex: menuIndex }) : null, view === "workspace" ? _jsx(WorkspaceHeader, { tab: tab, providerLabel: activeLaneLabel }) : null, view === "workspace" ? _jsx(Newline, {}) : null, view === "workspace" && tab === "discover" ? _jsx(RecommendationPanel, { state: recommendations }) : null, view === "workspace" && tab === "search" ? _jsx(SearchPanel, { state: search }) : null, view === "workspace" && tab === "library" ? _jsx(LibraryPanel, { providers: providers }) : null, view === "workspace" && tab === "accounts" ? _jsx(AccountPanel, { state: accountForm, providerLabel: accountProviderLabel, accountProviderId: accountProviderId, providers: providers }) : null, _jsx(Newline, {}), !isInteractive ? _jsx(Text, { dimColor: true, children: "\u5F53\u524D\u7EC8\u7AEF\u4E0D\u652F\u6301\u4EA4\u4E92\u8F93\u5165\uFF0C\u8BF7\u5728\u6B63\u5E38\u7EC8\u7AEF\u91CC\u8FD0\u884C BBCLI\u3002" }) : null, isInteractive && view === "menu" ? _jsx(Text, { dimColor: true, children: `${activeMenu?.label ?? "菜单"}  ·  ← → 切换  ·  Enter 进入  ·  直接输入可搜索` }) : null, isInteractive && view === "workspace" && tab === "discover" ? _jsx(Text, { dimColor: true, children: "\u2191\u2193 \u9009\u89C6\u9891  \u00B7  Enter \u6253\u5F00  \u00B7  r \u5237\u65B0  \u00B7  b \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "search" ? _jsx(Text, { dimColor: true, children: "\u8F93\u5165\u540E\u56DE\u8F66  \u00B7  \u2191\u2193 \u9009\u7ED3\u679C  \u00B7  Esc \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "library" ? _jsx(Text, { dimColor: true, children: "Esc \u6216 b \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "accounts" ? _jsx(Text, { dimColor: true, children: '[ ] 平台  ·  ↑↓ / Tab 字段  ·  m 模式  ·  d 默认  ·  Enter 保存  ·  Esc 返回' }) : null] }));
+    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(BrandHeader, { activeTab: view === "menu" ? undefined : tab, providerLabel: activeLaneLabel, inspectOnly: view === "workspace" ? inspectOnly : false }), _jsx(Newline, {}), view === "menu" ? _jsx(MenuScreen, { selectedIndex: menuIndex, selectedItemIndex: menuItemIndex, message: menuMessage }) : null, view === "workspace" ? _jsx(WorkspaceHeader, { tab: tab, providerLabel: activeLaneLabel }) : null, view === "workspace" ? _jsx(Newline, {}) : null, view === "workspace" && tab === "discover" ? _jsx(RecommendationPanel, { state: recommendations }) : null, view === "workspace" && tab === "search" ? _jsx(SearchPanel, { state: search }) : null, view === "workspace" && tab === "library" ? _jsx(LibraryPanel, { providers: providers }) : null, view === "workspace" && tab === "accounts" ? _jsx(AccountPanel, { state: accountForm, providerLabel: accountProviderLabel, accountProviderId: accountProviderId, providers: providers }) : null, _jsx(Newline, {}), !isInteractive ? _jsx(Text, { dimColor: true, children: "\u5F53\u524D\u7EC8\u7AEF\u4E0D\u652F\u6301\u4EA4\u4E92\u8F93\u5165\uFF0C\u8BF7\u5728\u6B63\u5E38\u7EC8\u7AEF\u91CC\u8FD0\u884C BBCLI\u3002" }) : null, isInteractive && view === "menu" ? _jsx(Text, { dimColor: true, children: `${activeMenu?.label ?? "菜单"}  ·  ← → 切分类  ·  ↑↓ 选入口  ·  Enter 进入  ·  直接输入可搜索` }) : null, isInteractive && view === "workspace" && tab === "discover" ? _jsx(Text, { dimColor: true, children: "\u2191\u2193 \u9009\u89C6\u9891  \u00B7  Enter \u6253\u5F00  \u00B7  r \u5237\u65B0  \u00B7  b \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "search" ? _jsx(Text, { dimColor: true, children: "\u8F93\u5165\u540E\u56DE\u8F66  \u00B7  \u2191\u2193 \u9009\u7ED3\u679C  \u00B7  Esc \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "library" ? _jsx(Text, { dimColor: true, children: "Esc \u6216 b \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "accounts" ? _jsx(Text, { dimColor: true, children: '[ ] 平台  ·  ↑↓ / Tab 字段  ·  m 模式  ·  d 默认  ·  Enter 保存  ·  Esc 返回' }) : null] }));
 }
-function MenuScreen({ selectedIndex }) {
+function MenuScreen({ selectedIndex, selectedItemIndex, message, }) {
     const activeItem = HOME_TABS[selectedIndex];
+    const activeMenuItem = activeItem.items[selectedItemIndex];
     return (_jsxs(Box, { flexDirection: "column", children: [_jsx(Box, { children: HOME_TABS.map((item, index) => {
                     const selected = index === selectedIndex;
                     return (_jsxs(React.Fragment, { children: [_jsx(Text, { backgroundColor: selected ? "cyan" : undefined, color: selected ? "black" : "gray", bold: selected, children: selected ? ` ${item.label} ` : item.label }), index < HOME_TABS.length - 1 ? _jsx(Text, { children: "  " }) : null] }, item.id));
-                }) }), _jsx(Newline, {}), _jsx(Text, { bold: true, children: activeItem.summary }), _jsx(Newline, {}), activeItem.highlights.map((line, index) => (_jsx(Text, { dimColor: true, children: `${index === 0 ? ">" : "·"} ${line}` }, `${activeItem.id}-${index}`)))] }));
+                }) }), _jsx(Newline, {}), _jsx(Text, { bold: true, children: activeItem.summary }), _jsx(Newline, {}), _jsx(Box, { flexDirection: "column", borderStyle: "round", borderColor: "gray", paddingX: 1, children: activeItem.items.map((item, index) => {
+                    const selected = index === selectedItemIndex;
+                    return (_jsxs(Box, { flexDirection: "column", marginBottom: index < activeItem.items.length - 1 ? 1 : 0, children: [_jsxs(Box, { children: [_jsx(Text, { color: selected ? "yellow" : "gray", children: selected ? ">" : " " }), _jsx(Text, { children: " " }), _jsx(Text, { backgroundColor: selected ? "cyan" : undefined, color: selected ? "black" : undefined, bold: selected, children: ` ${item.label} ` }), _jsx(Text, { children: " " }), _jsx(InlinePill, { label: item.status === "live" ? "可用" : "规划中", tone: item.status === "live" ? "green" : "gray" })] }), _jsx(Text, { dimColor: true, children: `  ${item.note}` })] }, item.id));
+                }) }), message ? (_jsxs(_Fragment, { children: [_jsx(Newline, {}), _jsx(Text, { color: "yellow", children: message })] })) : activeMenuItem ? (_jsxs(_Fragment, { children: [_jsx(Newline, {}), _jsx(Text, { dimColor: true, children: `当前入口：${activeMenuItem.label}` })] })) : null] }));
 }
 function WorkspaceHeader({ tab, providerLabel }) {
     return (_jsxs(Box, { children: [_jsx(Text, { dimColor: true, children: "\u2190 \u83DC\u5355" }), _jsx(Text, { dimColor: true, children: "  /  " }), _jsx(Text, { bold: true, children: formatHomeTab(tab) }), _jsx(Text, { dimColor: true, children: `  /  ${providerLabel}` })] }));
