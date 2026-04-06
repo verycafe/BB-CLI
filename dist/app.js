@@ -34,7 +34,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
     const [activeTarget, setActiveTarget] = useState(target);
     const [launchInspectOnly, setLaunchInspectOnly] = useState(inspectOnly);
     const [launchVo, setLaunchVo] = useState(preferredVo);
-    const [homeTab, setHomeTab] = useState("recommend");
+    const [homeTab, setHomeTab] = useState("discover");
     const [providerSummaries, setProviderSummaries] = useState([]);
     const [recommendations, setRecommendations] = useState({
         loading: !target,
@@ -182,7 +182,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
         }
         if (state.status === "error") {
             if (inputKey === "b" || inputKey === "h") {
-                returnToHome("recommend");
+                returnToHome("discover");
                 return;
             }
             if (inputKey === "q" || key.escape || key.return) {
@@ -200,7 +200,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
             return;
         }
         if (inputKey === "b" || inputKey === "h") {
-            returnToHome("recommend");
+            returnToHome("discover");
             return;
         }
         if (key.upArrow || inputKey === "k") {
@@ -284,7 +284,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
             return;
         }
         if (inputKey === "1") {
-            setHomeTab("recommend");
+            setHomeTab("discover");
             return;
         }
         if (inputKey === "2" || inputKey === "/") {
@@ -297,8 +297,12 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
             }
             return;
         }
-        if (inputKey === "3" || inputKey === "a") {
-            setHomeTab("account");
+        if (inputKey === "3") {
+            setHomeTab("library");
+            return;
+        }
+        if (inputKey === "4" || inputKey === "a") {
+            setHomeTab("accounts");
             return;
         }
         if (inputKey === "i") {
@@ -309,7 +313,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
             setLaunchVo((value) => nextVo(value));
             return;
         }
-        if (homeTab !== "search" && isPlainTextInput(inputKey, key)) {
+        if (homeTab !== "search" && homeTab !== "accounts" && isPlainTextInput(inputKey, key)) {
             setHomeTab("search");
             setSearch((current) => ({
                 ...current,
@@ -318,12 +322,18 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
             }));
             return;
         }
-        if (homeTab === "recommend") {
+        if (homeTab === "discover") {
             handleRecommendationInput(inputKey, key);
             return;
         }
         if (homeTab === "search") {
             handleSearchInput(inputKey, key);
+            return;
+        }
+        if (homeTab === "library") {
+            if (inputKey === "r") {
+                setRecommendationKey((value) => value + 1);
+            }
             return;
         }
         handleAccountInput(inputKey, key);
@@ -378,7 +388,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
                 message: undefined,
                 lastRunQuery: undefined,
             }));
-            setHomeTab("recommend");
+            setHomeTab("discover");
             return;
         }
         if (key.backspace || key.delete) {
@@ -465,7 +475,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
             return;
         }
         if (key.escape) {
-            setHomeTab("recommend");
+            setHomeTab("discover");
             return;
         }
         if (key.backspace || key.delete) {
@@ -579,7 +589,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
         setActiveTarget(undefined);
         setHomeTab(tab);
         setState({ status: "home" });
-        if (tab === "recommend") {
+        if (tab === "discover") {
             setRecommendationKey((value) => value + 1);
         }
     }
@@ -602,25 +612,55 @@ function InputController({ onInput }) {
     return null;
 }
 function HomeScreen({ tab, providerLabel, inspectOnly, preferredVo, providers, recommendations, search, accountForm, accountProviderLabel, isInteractive, }) {
-    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { color: "cyan", children: "BBCLI" }), _jsx(Text, { bold: true, children: `${providerLabel} home is ready. Search first, or open something from recommendations.` }), _jsx(Text, { dimColor: true, children: `Mode: ${inspectOnly ? "inspect" : "play"}  |  Preferred VO: ${preferredVo}` }), _jsx(Newline, {}), _jsxs(Box, { children: [_jsx(TabLabel, { label: "1 Recommend", selected: tab === "recommend" }), _jsx(Text, { children: "  " }), _jsx(TabLabel, { label: "2 Search", selected: tab === "search" }), _jsx(Text, { children: "  " }), _jsx(TabLabel, { label: "3 Bind Account", selected: tab === "account" })] }), _jsx(Newline, {}), tab === "recommend" ? _jsx(RecommendationPanel, { state: recommendations }) : null, tab === "search" ? _jsx(SearchPanel, { state: search, providerLabel: providerLabel }) : null, tab === "account" ? _jsx(AccountPanel, { state: accountForm, providerLabel: accountProviderLabel }) : null, _jsx(Newline, {}), _jsx(Text, { color: "green", children: "Controls" }), isInteractive ? (_jsxs(_Fragment, { children: [_jsx(Text, { children: "1/2/3 switch views. i toggles inspect, v cycles VO, q quits." }), tab === "recommend" ? _jsx(Text, { children: "Recommend: j/k or arrows move, Enter opens, r refreshes, typing jumps into search." }) : null, tab === "search" ? _jsx(Text, { children: "Search: type keywords or paste a Bilibili link, Enter searches or opens, j/k selects results, Esc returns." }) : null, tab === "account" ? _jsx(Text, { children: "Account: type to edit the active field, Tab switches field, m toggles cookie/file mode, d toggles default, Enter binds." }) : null] })) : (_jsx(Text, { children: "Interactive input is not available in this terminal session. Run BBCLI in a normal terminal." })), _jsx(Newline, {}), _jsx(Text, { color: "green", children: "Providers" }), providers.map((provider) => (_jsxs(Text, { children: [provider.label, "  |  accounts ", provider.boundAccounts, provider.defaultAccount ? `  |  default ${provider.defaultAccount}` : "", provider.example ? `  |  ${provider.example}` : ""] }, provider.id))), _jsx(Text, { dimColor: true, children: `Account store: ${buildAccountStorePath()}` })] }));
+    const totalAccounts = providers.reduce((count, provider) => count + provider.boundAccounts, 0);
+    const connectedProviders = providers.filter((provider) => provider.boundAccounts > 0).length;
+    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(BrandHeader, { activeTab: tab, providerLabel: providerLabel, inspectOnly: inspectOnly, preferredVo: preferredVo, totalAccounts: totalAccounts, connectedProviders: connectedProviders }), _jsx(Newline, {}), _jsxs(Box, { children: [_jsx(TabLabel, { label: "1 Discover", selected: tab === "discover" }), _jsx(Text, { children: "  " }), _jsx(TabLabel, { label: "2 Search", selected: tab === "search" }), _jsx(Text, { children: "  " }), _jsx(TabLabel, { label: "3 Library", selected: tab === "library" }), _jsx(Text, { children: "  " }), _jsx(TabLabel, { label: "4 Accounts", selected: tab === "accounts" })] }), _jsx(Newline, {}), tab === "discover" ? _jsx(RecommendationPanel, { state: recommendations, providerLabel: providerLabel }) : null, tab === "search" ? _jsx(SearchPanel, { state: search, providerLabel: providerLabel }) : null, tab === "library" ? _jsx(LibraryPanel, { providers: providers }) : null, tab === "accounts" ? _jsx(AccountPanel, { state: accountForm, providerLabel: accountProviderLabel }) : null, _jsx(Newline, {}), _jsx(Text, { color: "green", children: "Controls" }), isInteractive ? (_jsxs(_Fragment, { children: [_jsx(Text, { children: "1/2/3/4 switch workspaces. i toggles inspect, v cycles VO, q quits." }), tab === "discover" ? _jsx(Text, { children: "Discover: j/k or arrows move, Enter opens, r refreshes, typing jumps into search." }) : null, tab === "search" ? _jsx(Text, { children: "Search: type keywords or paste a Bilibili link, Enter searches or opens, j/k selects results, Esc returns." }) : null, tab === "library" ? _jsx(Text, { children: "Library: this is the future shelf for WeRead, local EPUB/PDF, saved watch-later items, and synced reading progress." }) : null, tab === "accounts" ? _jsx(Text, { children: "Accounts: type to edit the active field, Tab switches field, m toggles cookie/file mode, d toggles default, Enter binds." }) : null] })) : (_jsx(Text, { children: "Interactive input is not available in this terminal session. Run BBCLI in a normal terminal." })), _jsx(Newline, {}), _jsx(Text, { color: "green", children: "Providers" }), providers.map((provider) => (_jsxs(Text, { children: [provider.label, "  |  accounts ", provider.boundAccounts, provider.defaultAccount ? `  |  default ${provider.defaultAccount}` : "", provider.example ? `  |  ${provider.example}` : ""] }, provider.id))), _jsx(Text, { dimColor: true, children: `Account store: ${buildAccountStorePath()}` })] }));
 }
-function RecommendationPanel({ state }) {
-    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { color: "green", children: "Bilibili Recommendations" }), state.loading ? _jsx(Text, { dimColor: true, children: "Loading homepage recommendations..." }) : null, !state.loading && state.items.length === 0 ? _jsx(Text, { dimColor: true, children: state.message ?? "No recommendations yet." }) : null, state.items.slice(0, 8).map((item, index) => {
+function BrandHeader({ activeTab, providerLabel, inspectOnly, preferredVo, totalAccounts, connectedProviders, }) {
+    const mascotLines = [
+        "  .------.  ",
+        " /  .--.  \\ ",
+        "|  | oo |  |",
+        "|  | -- |  |",
+        "|  '----'  |",
+        " \\__====__/ ",
+        "  / /  \\ \\  ",
+    ];
+    return (_jsxs(Box, { flexDirection: "column", children: [_jsxs(Box, { children: [_jsx(Box, { flexDirection: "column", marginRight: 2, children: mascotLines.map((line) => (_jsx(Text, { color: "yellow", children: line }, line))) }), _jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { color: "cyan", bold: true, children: "BBCLI" }), _jsx(Text, { bold: true, children: "Terminal Swiss Army Hub" }), _jsx(Text, { dimColor: true, children: "Watch, read, search, and connect remote or local content from one launcher." }), _jsx(Text, { dimColor: true, children: `Workspace: ${formatHomeTab(activeTab)}  |  Active lane: ${providerLabel}  |  Mode: ${inspectOnly ? "inspect" : "play"}` }), _jsx(Text, { dimColor: true, children: `Connected providers: ${connectedProviders}  |  Bound accounts: ${totalAccounts}  |  Preferred VO: ${preferredVo}` })] })] }), _jsx(Text, { dimColor: true, children: "-".repeat(78) })] }));
+}
+function RecommendationPanel({ state, providerLabel }) {
+    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { color: "green", children: "Discover" }), _jsx(Text, { dimColor: true, children: `${providerLabel} homepage recommendations are live now. This lane will later merge YouTube, Instagram, WeRead, and other connected feeds.` }), _jsx(Newline, {}), state.loading ? _jsx(Text, { dimColor: true, children: "Loading homepage recommendations..." }) : null, !state.loading && state.items.length === 0 ? _jsx(Text, { dimColor: true, children: state.message ?? "No recommendations yet." }) : null, state.items.slice(0, 8).map((item, index) => {
                 const selected = index === state.selectedIndex;
                 return (_jsxs(Box, { flexDirection: "column", marginBottom: 1, children: [_jsx(Text, { color: selected ? "yellow" : undefined, children: `${selected ? ">" : " "} ${item.title}` }), _jsx(Text, { dimColor: true, children: `${item.ownerName}  |  ${formatDuration(item.durationSeconds ?? 0)}  |  ${formatCount(item.viewCount)}` })] }, `${item.pageUrl}-${index}`));
             }), state.message && state.items.length > 0 ? _jsx(Text, { color: "yellow", children: state.message }) : null] }));
 }
 function SearchPanel({ state, providerLabel }) {
-    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { color: "green", children: `Search ${providerLabel}` }), _jsx(Text, { children: `> ${state.query || "Type keywords or paste a video link..."}` }), state.loading ? _jsx(Text, { dimColor: true, children: "Searching..." }) : null, state.message ? _jsx(Text, { color: "yellow", children: state.message }) : null, state.results.map((item, index) => {
+    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { color: "green", children: "Search" }), _jsx(Text, { dimColor: true, children: `Current source: ${providerLabel}. This search lane is where Google, YouTube, INS, WeRead, and local libraries will eventually plug in too.` }), _jsx(Newline, {}), _jsx(Text, { children: `> ${state.query || "Type keywords or paste a video link..."}` }), state.loading ? _jsx(Text, { dimColor: true, children: "Searching..." }) : null, state.message ? _jsx(Text, { color: "yellow", children: state.message }) : null, state.results.map((item, index) => {
                 const selected = index === state.selectedIndex;
                 return (_jsxs(Box, { flexDirection: "column", marginBottom: 1, children: [_jsx(Text, { color: selected ? "yellow" : undefined, children: `${selected ? ">" : " "} ${item.title}` }), _jsx(Text, { dimColor: true, children: `${item.ownerName}  |  ${formatDuration(item.durationSeconds ?? 0)}  |  ${formatCount(item.viewCount)}` })] }, `${item.pageUrl}-${index}`));
             })] }));
 }
+function LibraryPanel({ providers }) {
+    const connected = providers.filter((provider) => provider.boundAccounts > 0);
+    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { color: "green", children: "Library" }), _jsx(Text, { dimColor: true, children: "Library is the long-lived personal shelf for saved media, remote reading shelves, and local files." }), _jsx(Newline, {}), _jsx(Text, { children: "What will live here:" }), _jsx(Text, { dimColor: true, children: "- WeRead shelves and reading progress" }), _jsx(Text, { dimColor: true, children: "- Local EPUB, PDF, and text libraries" }), _jsx(Text, { dimColor: true, children: "- Saved videos, watch later queues, and downloaded sessions" }), _jsx(Text, { dimColor: true, children: "- Cross-provider history and resume points" }), _jsx(Newline, {}), _jsx(Text, { children: "Current connection snapshot:" }), connected.length > 0 ? connected.map((provider) => (_jsx(Text, { children: `${provider.label}  |  accounts ${provider.boundAccounts}${provider.defaultAccount ? `  |  default ${provider.defaultAccount}` : ""}` }, provider.id))) : _jsx(Text, { dimColor: true, children: "No connected libraries yet. Use Accounts to start wiring providers in." })] }));
+}
 function AccountPanel({ state, providerLabel }) {
-    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { color: "green", children: `Bind ${providerLabel} Account` }), _jsx(Text, { dimColor: true, children: state.existingAccounts.length > 0 ? `Existing: ${state.existingAccounts.join(", ")}${state.defaultAccount ? `  |  default ${state.defaultAccount}` : ""}` : "No accounts bound yet." }), _jsx(Newline, {}), _jsx(Text, { color: state.activeField === "name" ? "yellow" : undefined, children: `${state.activeField === "name" ? ">" : " "} Account name: ${state.name || "main"}` }), _jsx(Text, { dimColor: true, children: `  Input mode: ${state.inputMode === "cookie" ? "Paste Cookie" : "Cookie File Path"}  |  Default: ${state.makeDefault ? "yes" : "no"}` }), _jsx(Text, { color: state.activeField === "value" ? "yellow" : undefined, children: `${state.activeField === "value" ? ">" : " "} ${state.inputMode === "cookie" ? "Cookie" : "Cookie file"}: ${formatAccountValue(state.inputMode, state.value)}` }), _jsx(Text, { color: state.activeField === "note" ? "yellow" : undefined, children: `${state.activeField === "note" ? ">" : " "} Note: ${state.note || "optional"}` }), state.busy ? _jsx(Text, { dimColor: true, children: "Working..." }) : null, state.message ? _jsx(Text, { color: "yellow", children: state.message }) : null] }));
+    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { color: "green", children: "Accounts" }), _jsx(Text, { dimColor: true, children: `Connector target: ${providerLabel}. This workspace will eventually hold Bilibili, WeRead, YouTube, Instagram, and any other provider login flow.` }), _jsx(Newline, {}), _jsx(Text, { children: `Bind ${providerLabel} account` }), _jsx(Text, { dimColor: true, children: state.existingAccounts.length > 0 ? `Existing: ${state.existingAccounts.join(", ")}${state.defaultAccount ? `  |  default ${state.defaultAccount}` : ""}` : "No accounts bound yet." }), _jsx(Newline, {}), _jsx(Text, { color: state.activeField === "name" ? "yellow" : undefined, children: `${state.activeField === "name" ? ">" : " "} Account name: ${state.name || "main"}` }), _jsx(Text, { dimColor: true, children: `  Input mode: ${state.inputMode === "cookie" ? "Paste Cookie" : "Cookie File Path"}  |  Default: ${state.makeDefault ? "yes" : "no"}` }), _jsx(Text, { color: state.activeField === "value" ? "yellow" : undefined, children: `${state.activeField === "value" ? ">" : " "} ${state.inputMode === "cookie" ? "Cookie" : "Cookie file"}: ${formatAccountValue(state.inputMode, state.value)}` }), _jsx(Text, { color: state.activeField === "note" ? "yellow" : undefined, children: `${state.activeField === "note" ? ">" : " "} Note: ${state.note || "optional"}` }), state.busy ? _jsx(Text, { dimColor: true, children: "Working..." }) : null, state.message ? _jsx(Text, { color: "yellow", children: state.message }) : null] }));
 }
 function TabLabel({ label, selected }) {
     return _jsx(Text, { color: selected ? "yellow" : "gray", children: label });
+}
+function formatHomeTab(tab) {
+    if (tab === "discover") {
+        return "Discover";
+    }
+    if (tab === "search") {
+        return "Search";
+    }
+    if (tab === "library") {
+        return "Library";
+    }
+    return "Accounts";
 }
 function LoadingScreen({ target }) {
     return (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { color: "yellow", children: `Loading ${target.providerLabel} page data...` }), _jsx(Text, { dimColor: true, children: target.originalInput }), _jsx(Text, { dimColor: true, children: "Fetching `window.__playinfo__` and `window.__INITIAL_STATE__`." })] }));

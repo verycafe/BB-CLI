@@ -4,9 +4,12 @@
 
 It currently does these things:
 
-- opens an interactive `bbcli` home screen instead of forcing subcommands as the primary entry
-- shows Bilibili homepage recommendations by default
-- searches Bilibili videos from inside the Ink UI
+- opens an interactive `bbcli` home screen with a branded header and workspace shell
+- lands on `Discover` by default instead of forcing site-specific subcommands
+- shows Bilibili homepage recommendations in `Discover`
+- searches Bilibili videos from inside the `Search` workspace
+- reserves a first-class `Library` workspace for future reading and local-file flows
+- keeps `Accounts` as a unified connection surface for future providers
 - opens selected videos and extracts `window.__playinfo__` and `window.__INITIAL_STATE__`
 - launches playback through `mpv` terminal video outputs with the priority `kitty -> sixel -> tct`
 - binds provider-scoped accounts from the same Ink launcher or through CLI commands
@@ -79,10 +82,18 @@ bbcli
 
 From there you can:
 
-- browse Bilibili homepage recommendations
-- type to jump straight into search
-- press `3` to bind a Bilibili account inside the Ink UI
+- browse `Discover`
+- type to jump straight into `Search`
+- press `3` to inspect the future `Library` shelf
+- press `4` to bind a Bilibili account inside the Ink UI
 - press `Enter` on a selected result to open it
+
+The top-level workspaces are:
+
+- `Discover`: recommendation feeds and future connected provider timelines
+- `Search`: cross-provider search lane, currently wired to Bilibili
+- `Library`: future home for WeRead, local EPUB/PDF/text files, saved sessions, and reading progress
+- `Accounts`: provider connection and credential management
 
 ## Useful flags
 
@@ -112,6 +123,7 @@ bbcli
 ```
 
 Then press `3` and fill in:
+Then press `4` and fill in:
 
 - account name
 - Cookie text or cookie file path

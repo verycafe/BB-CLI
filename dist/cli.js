@@ -159,7 +159,7 @@ function handleCliError(error) {
 }
 function printNonInteractiveHelp() {
     console.log("BBCLI");
-    console.log("Run `bbcli` in an interactive terminal to open the default launcher.");
+    console.log("Run `bbcli` in an interactive terminal to open the Discover/Search/Library/Accounts launcher.");
     console.log("");
     console.log("Direct playback:");
     console.log("  bbcli BV17PYqerEtA");

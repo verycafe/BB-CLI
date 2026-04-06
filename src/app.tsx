@@ -46,7 +46,7 @@ type AppState =
   | {status: "playing"; session: VideoSession; support: PlayerSupport; selectedIndex: number; account?: RequestAccount; message: string}
   | {status: "error"; error: string};
 
-type HomeTab = "recommend" | "search" | "account";
+type HomeTab = "discover" | "search" | "library" | "accounts";
 
 type HomeProviderSummary = {
   id: string;
@@ -119,7 +119,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
   const [activeTarget, setActiveTarget] = useState<MediaTarget | undefined>(target);
   const [launchInspectOnly, setLaunchInspectOnly] = useState(inspectOnly);
   const [launchVo, setLaunchVo] = useState<PlayerVo>(preferredVo);
-  const [homeTab, setHomeTab] = useState<HomeTab>("recommend");
+  const [homeTab, setHomeTab] = useState<HomeTab>("discover");
   const [providerSummaries, setProviderSummaries] = useState<HomeProviderSummary[]>([]);
   const [recommendations, setRecommendations] = useState<RecommendationState>({
     loading: !target,
@@ -290,7 +290,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
 
     if (state.status === "error") {
       if (inputKey === "b" || inputKey === "h") {
-        returnToHome("recommend");
+        returnToHome("discover");
         return;
       }
 
@@ -314,7 +314,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
     }
 
     if (inputKey === "b" || inputKey === "h") {
-      returnToHome("recommend");
+      returnToHome("discover");
       return;
     }
 
@@ -409,7 +409,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
     }
 
     if (inputKey === "1") {
-      setHomeTab("recommend");
+      setHomeTab("discover");
       return;
     }
 
@@ -424,8 +424,13 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
       return;
     }
 
-    if (inputKey === "3" || inputKey === "a") {
-      setHomeTab("account");
+    if (inputKey === "3") {
+      setHomeTab("library");
+      return;
+    }
+
+    if (inputKey === "4" || inputKey === "a") {
+      setHomeTab("accounts");
       return;
     }
 
@@ -439,7 +444,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
       return;
     }
 
-    if (homeTab !== "search" && isPlainTextInput(inputKey, key)) {
+    if (homeTab !== "search" && homeTab !== "accounts" && isPlainTextInput(inputKey, key)) {
       setHomeTab("search");
       setSearch((current) => ({
         ...current,
@@ -449,13 +454,20 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
       return;
     }
 
-    if (homeTab === "recommend") {
+    if (homeTab === "discover") {
       handleRecommendationInput(inputKey, key);
       return;
     }
 
     if (homeTab === "search") {
       handleSearchInput(inputKey, key);
+      return;
+    }
+
+    if (homeTab === "library") {
+      if (inputKey === "r") {
+        setRecommendationKey((value) => value + 1);
+      }
       return;
     }
 
@@ -518,7 +530,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
         message: undefined,
         lastRunQuery: undefined,
       }));
-      setHomeTab("recommend");
+      setHomeTab("discover");
       return;
     }
 
@@ -616,7 +628,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
     }
 
     if (key.escape) {
-      setHomeTab("recommend");
+      setHomeTab("discover");
       return;
     }
 
@@ -743,7 +755,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
     setActiveTarget(undefined);
     setHomeTab(tab);
     setState({status: "home"});
-    if (tab === "recommend") {
+    if (tab === "discover") {
       setRecommendationKey((value) => value + 1);
     }
   }
@@ -833,34 +845,46 @@ function HomeScreen({
   accountProviderLabel: string;
   isInteractive: boolean;
 }) {
+  const totalAccounts = providers.reduce((count, provider) => count + provider.boundAccounts, 0);
+  const connectedProviders = providers.filter((provider) => provider.boundAccounts > 0).length;
+
   return (
     <Box flexDirection="column">
-      <Text color="cyan">BBCLI</Text>
-      <Text bold>{`${providerLabel} home is ready. Search first, or open something from recommendations.`}</Text>
-      <Text dimColor>{`Mode: ${inspectOnly ? "inspect" : "play"}  |  Preferred VO: ${preferredVo}`}</Text>
+      <BrandHeader
+        activeTab={tab}
+        providerLabel={providerLabel}
+        inspectOnly={inspectOnly}
+        preferredVo={preferredVo}
+        totalAccounts={totalAccounts}
+        connectedProviders={connectedProviders}
+      />
       <Newline />
 
       <Box>
-        <TabLabel label="1 Recommend" selected={tab === "recommend"} />
+        <TabLabel label="1 Discover" selected={tab === "discover"} />
         <Text>  </Text>
         <TabLabel label="2 Search" selected={tab === "search"} />
         <Text>  </Text>
-        <TabLabel label="3 Bind Account" selected={tab === "account"} />
+        <TabLabel label="3 Library" selected={tab === "library"} />
+        <Text>  </Text>
+        <TabLabel label="4 Accounts" selected={tab === "accounts"} />
       </Box>
 
       <Newline />
-      {tab === "recommend" ? <RecommendationPanel state={recommendations} /> : null}
+      {tab === "discover" ? <RecommendationPanel state={recommendations} providerLabel={providerLabel} /> : null}
       {tab === "search" ? <SearchPanel state={search} providerLabel={providerLabel} /> : null}
-      {tab === "account" ? <AccountPanel state={accountForm} providerLabel={accountProviderLabel} /> : null}
+      {tab === "library" ? <LibraryPanel providers={providers} /> : null}
+      {tab === "accounts" ? <AccountPanel state={accountForm} providerLabel={accountProviderLabel} /> : null}
 
       <Newline />
       <Text color="green">Controls</Text>
       {isInteractive ? (
         <>
-          <Text>1/2/3 switch views. i toggles inspect, v cycles VO, q quits.</Text>
-          {tab === "recommend" ? <Text>Recommend: j/k or arrows move, Enter opens, r refreshes, typing jumps into search.</Text> : null}
+          <Text>1/2/3/4 switch workspaces. i toggles inspect, v cycles VO, q quits.</Text>
+          {tab === "discover" ? <Text>Discover: j/k or arrows move, Enter opens, r refreshes, typing jumps into search.</Text> : null}
           {tab === "search" ? <Text>Search: type keywords or paste a Bilibili link, Enter searches or opens, j/k selects results, Esc returns.</Text> : null}
-          {tab === "account" ? <Text>Account: type to edit the active field, Tab switches field, m toggles cookie/file mode, d toggles default, Enter binds.</Text> : null}
+          {tab === "library" ? <Text>Library: this is the future shelf for WeRead, local EPUB/PDF, saved watch-later items, and synced reading progress.</Text> : null}
+          {tab === "accounts" ? <Text>Accounts: type to edit the active field, Tab switches field, m toggles cookie/file mode, d toggles default, Enter binds.</Text> : null}
         </>
       ) : (
         <Text>Interactive input is not available in this terminal session. Run BBCLI in a normal terminal.</Text>
@@ -878,10 +902,62 @@ function HomeScreen({
   );
 }
 
-function RecommendationPanel({state}: {state: RecommendationState}) {
+function BrandHeader({
+  activeTab,
+  providerLabel,
+  inspectOnly,
+  preferredVo,
+  totalAccounts,
+  connectedProviders,
+}: {
+  activeTab: HomeTab;
+  providerLabel: string;
+  inspectOnly: boolean;
+  preferredVo: PlayerVo;
+  totalAccounts: number;
+  connectedProviders: number;
+}) {
+  const mascotLines = [
+    "  .------.  ",
+    " /  .--.  \\ ",
+    "|  | oo |  |",
+    "|  | -- |  |",
+    "|  '----'  |",
+    " \\__====__/ ",
+    "  / /  \\ \\  ",
+  ];
+
   return (
     <Box flexDirection="column">
-      <Text color="green">Bilibili Recommendations</Text>
+      <Box>
+        <Box flexDirection="column" marginRight={2}>
+          {mascotLines.map((line) => (
+            <Text key={line} color="yellow">
+              {line}
+            </Text>
+          ))}
+        </Box>
+        <Box flexDirection="column">
+          <Text color="cyan" bold>
+            BBCLI
+          </Text>
+          <Text bold>Terminal Swiss Army Hub</Text>
+          <Text dimColor>Watch, read, search, and connect remote or local content from one launcher.</Text>
+          <Text dimColor>{`Workspace: ${formatHomeTab(activeTab)}  |  Active lane: ${providerLabel}  |  Mode: ${inspectOnly ? "inspect" : "play"}`}</Text>
+          <Text dimColor>{`Connected providers: ${connectedProviders}  |  Bound accounts: ${totalAccounts}  |  Preferred VO: ${preferredVo}`}</Text>
+        </Box>
+      </Box>
+      <Text dimColor>{"-".repeat(78)}</Text>
+    </Box>
+  );
+}
+
+function RecommendationPanel({state, providerLabel}: {state: RecommendationState; providerLabel: string}) {
+  return (
+    <Box flexDirection="column">
+      <Text color="green">Discover</Text>
+      <Text dimColor>{`${providerLabel} homepage recommendations are live now. This lane will later merge YouTube, Instagram, WeRead, and other connected feeds.`}</Text>
+      <Newline />
       {state.loading ? <Text dimColor>Loading homepage recommendations...</Text> : null}
       {!state.loading && state.items.length === 0 ? <Text dimColor>{state.message ?? "No recommendations yet."}</Text> : null}
       {state.items.slice(0, 8).map((item, index) => {
@@ -901,7 +977,9 @@ function RecommendationPanel({state}: {state: RecommendationState}) {
 function SearchPanel({state, providerLabel}: {state: SearchState; providerLabel: string}) {
   return (
     <Box flexDirection="column">
-      <Text color="green">{`Search ${providerLabel}`}</Text>
+      <Text color="green">Search</Text>
+      <Text dimColor>{`Current source: ${providerLabel}. This search lane is where Google, YouTube, INS, WeRead, and local libraries will eventually plug in too.`}</Text>
+      <Newline />
       <Text>{`> ${state.query || "Type keywords or paste a video link..."}`}</Text>
       {state.loading ? <Text dimColor>Searching...</Text> : null}
       {state.message ? <Text color="yellow">{state.message}</Text> : null}
@@ -918,10 +996,35 @@ function SearchPanel({state, providerLabel}: {state: SearchState; providerLabel:
   );
 }
 
+function LibraryPanel({providers}: {providers: HomeProviderSummary[]}) {
+  const connected = providers.filter((provider) => provider.boundAccounts > 0);
+
+  return (
+    <Box flexDirection="column">
+      <Text color="green">Library</Text>
+      <Text dimColor>Library is the long-lived personal shelf for saved media, remote reading shelves, and local files.</Text>
+      <Newline />
+      <Text>What will live here:</Text>
+      <Text dimColor>- WeRead shelves and reading progress</Text>
+      <Text dimColor>- Local EPUB, PDF, and text libraries</Text>
+      <Text dimColor>- Saved videos, watch later queues, and downloaded sessions</Text>
+      <Text dimColor>- Cross-provider history and resume points</Text>
+      <Newline />
+      <Text>Current connection snapshot:</Text>
+      {connected.length > 0 ? connected.map((provider) => (
+        <Text key={provider.id}>{`${provider.label}  |  accounts ${provider.boundAccounts}${provider.defaultAccount ? `  |  default ${provider.defaultAccount}` : ""}`}</Text>
+      )) : <Text dimColor>No connected libraries yet. Use Accounts to start wiring providers in.</Text>}
+    </Box>
+  );
+}
+
 function AccountPanel({state, providerLabel}: {state: AccountFormState; providerLabel: string}) {
   return (
     <Box flexDirection="column">
-      <Text color="green">{`Bind ${providerLabel} Account`}</Text>
+      <Text color="green">Accounts</Text>
+      <Text dimColor>{`Connector target: ${providerLabel}. This workspace will eventually hold Bilibili, WeRead, YouTube, Instagram, and any other provider login flow.`}</Text>
+      <Newline />
+      <Text>{`Bind ${providerLabel} account`}</Text>
       <Text dimColor>{state.existingAccounts.length > 0 ? `Existing: ${state.existingAccounts.join(", ")}${state.defaultAccount ? `  |  default ${state.defaultAccount}` : ""}` : "No accounts bound yet."}</Text>
       <Newline />
       <Text color={state.activeField === "name" ? "yellow" : undefined}>{`${state.activeField === "name" ? ">" : " "} Account name: ${state.name || "main"}`}</Text>
@@ -936,6 +1039,22 @@ function AccountPanel({state, providerLabel}: {state: AccountFormState; provider
 
 function TabLabel({label, selected}: {label: string; selected: boolean}) {
   return <Text color={selected ? "yellow" : "gray"}>{label}</Text>;
+}
+
+function formatHomeTab(tab: HomeTab): string {
+  if (tab === "discover") {
+    return "Discover";
+  }
+
+  if (tab === "search") {
+    return "Search";
+  }
+
+  if (tab === "library") {
+    return "Library";
+  }
+
+  return "Accounts";
 }
 
 function LoadingScreen({target}: {target: MediaTarget}) {
