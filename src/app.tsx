@@ -1015,18 +1015,20 @@ function HomeScreen({
       <Newline />
 
       {view === "menu" ? <MenuScreen selectedIndex={menuIndex} /> : null}
-      {view === "workspace" && tab === "discover" ? <RecommendationPanel state={recommendations} providerLabel={providerLabel} /> : null}
-      {view === "workspace" && tab === "search" ? <SearchPanel state={search} providerLabel={providerLabel} /> : null}
+      {view === "workspace" ? <WorkspaceHeader tab={tab} providerLabel={activeLaneLabel} /> : null}
+      {view === "workspace" ? <Newline /> : null}
+      {view === "workspace" && tab === "discover" ? <RecommendationPanel state={recommendations} /> : null}
+      {view === "workspace" && tab === "search" ? <SearchPanel state={search} /> : null}
       {view === "workspace" && tab === "library" ? <LibraryPanel providers={providers} /> : null}
       {view === "workspace" && tab === "accounts" ? <AccountPanel state={accountForm} providerLabel={accountProviderLabel} accountProviderId={accountProviderId} providers={providers} /> : null}
 
       <Newline />
       {!isInteractive ? <Text dimColor>当前终端不支持交互输入，请在正常终端里运行 BBCLI。</Text> : null}
-      {isInteractive && view === "menu" ? <Text dimColor>{`${activeMenu?.label ?? "菜单"}：上下方向键选择，回车进入，直接输入可进入搜索，q 退出。`}</Text> : null}
-      {isInteractive && view === "workspace" && tab === "discover" ? <Text dimColor>上下方向键选择视频，回车打开，Esc 或 b 返回菜单。</Text> : null}
-      {isInteractive && view === "workspace" && tab === "search" ? <Text dimColor>输入后回车搜索，或对结果回车打开；Esc 或 b 返回菜单。</Text> : null}
-      {isInteractive && view === "workspace" && tab === "library" ? <Text dimColor>Esc 或 b 返回菜单。</Text> : null}
-      {isInteractive && view === "workspace" && tab === "accounts" ? <Text dimColor>{'`[` 和 `]` 切换连接器，Tab 切字段，回车绑定，Esc 或 b 返回菜单。'}</Text> : null}
+      {isInteractive && view === "menu" ? <Text dimColor>{`${activeMenu?.label ?? "菜单"}  ·  ↑↓ 选择  ·  Enter 进入  ·  直接输入搜索`}</Text> : null}
+      {isInteractive && view === "workspace" && tab === "discover" ? <Text dimColor>↑↓ 选择  ·  Enter 打开  ·  r 刷新  ·  b 返回</Text> : null}
+      {isInteractive && view === "workspace" && tab === "search" ? <Text dimColor>Enter 搜索或打开  ·  ↑↓ 选择  ·  Esc / b 返回</Text> : null}
+      {isInteractive && view === "workspace" && tab === "library" ? <Text dimColor>b 返回</Text> : null}
+      {isInteractive && view === "workspace" && tab === "accounts" ? <Text dimColor>{'[`] 切平台  ·  Tab 切字段  ·  Enter 绑定  ·  b 返回'}</Text> : null}
     </Box>
   );
 }
@@ -1037,12 +1039,22 @@ function MenuScreen({selectedIndex}: {selectedIndex: number}) {
       {HOME_TABS.map((item, index) => {
         const selected = index === selectedIndex;
         return (
-          <Box key={item.id} flexDirection="column" marginBottom={1}>
-            <Text color={selected ? "yellow" : undefined}>{`${selected ? ">" : " "} ${item.label}`}</Text>
-            <Text dimColor>{item.summary}</Text>
-          </Box>
+          <Text key={item.id} color={selected ? "yellow" : undefined}>
+            {`${selected ? ">" : " "} ${item.label}  ·  ${item.summary}`}
+          </Text>
         );
       })}
+    </Box>
+  );
+}
+
+function WorkspaceHeader({tab, providerLabel}: {tab: HomeTab; providerLabel: string}) {
+  return (
+    <Box>
+      <Text dimColor>← 菜单</Text>
+      <Text dimColor>  /  </Text>
+      <Text bold>{formatHomeTab(tab)}</Text>
+      <Text dimColor>{`  /  ${providerLabel}`}</Text>
     </Box>
   );
 }
@@ -1085,18 +1097,11 @@ function BrandHeader({
   );
 }
 
-function RecommendationPanel({
-  state,
-  providerLabel,
-}: {
-  state: RecommendationState;
-  providerLabel: string;
-}) {
+function RecommendationPanel({state}: {state: RecommendationState}) {
   return (
     <Box flexDirection="column">
-      <Text color="green">发现</Text>
-      <Text dimColor>{`${providerLabel} 首页推荐`}</Text>
-      <Newline />
+      {!state.loading && state.items.length > 0 ? <Text dimColor>{`共 ${state.items.length} 条推荐`}</Text> : null}
+      {!state.loading && state.items.length > 0 ? <Newline /> : null}
       {state.loading ? <Text dimColor>正在加载首页推荐...</Text> : null}
       {!state.loading && state.items.length === 0 ? <Text dimColor>{state.message ?? "当前还没有推荐内容。"}</Text> : null}
       {state.items.slice(0, 8).map((item, index) => {
@@ -1113,19 +1118,11 @@ function RecommendationPanel({
   );
 }
 
-function SearchPanel({
-  state,
-  providerLabel,
-}: {
-  state: SearchState;
-  providerLabel: string;
-}) {
+function SearchPanel({state}: {state: SearchState}) {
   return (
     <Box flexDirection="column">
-      <Text color="green">搜索</Text>
-      <Text dimColor>{`当前来源：${providerLabel}`}</Text>
-      <Newline />
       <Text>{`> ${state.query || "输入关键词，或粘贴视频链接..."}`}</Text>
+      {!state.loading && state.results.length > 0 ? <Text dimColor>{`结果 ${state.results.length} 条`}</Text> : null}
       {state.loading ? <Text dimColor>正在搜索...</Text> : null}
       {state.message ? <Text color="yellow">{state.message}</Text> : null}
       {state.results.map((item, index) => {
@@ -1146,12 +1143,9 @@ function LibraryPanel({providers}: {providers: HomeProviderSummary[]}) {
 
   return (
     <Box flexDirection="column">
-      <Text color="green">书库</Text>
-      <Text dimColor>内容来源</Text>
-      <Newline />
       <CompactConnectorRow items={LIBRARY_CONNECTORS} />
       <Newline />
-      <Text>当前连接状态：</Text>
+      <Text dimColor>当前连接</Text>
       {connected.length > 0 ? connected.map((provider) => (
         <Text key={provider.id}>{`${provider.label}  |  账号 ${provider.boundAccounts}${provider.defaultAccount ? `  |  默认 ${provider.defaultAccount}` : ""}`}</Text>
       )) : <Text dimColor>目前还没有连接任何书库来源，可以先去“账号”工作区绑定平台。</Text>}
@@ -1187,9 +1181,6 @@ function AccountPanel({
 
   return (
     <Box flexDirection="column">
-      <Text color="green">账号</Text>
-      <Text dimColor>{`当前平台：${providerLabel}`}</Text>
-      <Newline />
       <CompactConnectorRow items={accountConnectors} activeId={accountProviderId} />
       <Newline />
       <Text>{`绑定 ${providerLabel} 账号`}</Text>
