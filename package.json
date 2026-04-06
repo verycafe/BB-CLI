@@ -1,0 +1,54 @@
+{
+  "name": "@verycafe/bb-cli",
+  "version": "0.1.0",
+  "description": "A terminal-first media CLI with provider-aware accounts and Bilibili playback support.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "bbcli": "dist/cli.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/verycafe/BB-CLI.git"
+  },
+  "homepage": "https://github.com/verycafe/BB-CLI#readme",
+  "bugs": {
+    "url": "https://github.com/verycafe/BB-CLI/issues"
+  },
+  "keywords": [
+    "bilibili",
+    "cli",
+    "ink",
+    "terminal",
+    "video",
+    "mpv"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/cli.tsx",
+    "start": "node dist/cli.js",
+    "inspect": "tsx src/cli.tsx --inspect",
+    "prepare": "npm run build",
+    "typecheck": "tsc --noEmit"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "ink": "^6.8.0",
+    "meow": "^13.2.0",
+    "react": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.2",
+    "@types/react": "^19.2.14",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
+  }
+}
