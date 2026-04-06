@@ -95,11 +95,11 @@ resolve_release_source() {
   printf '%s' "$asset_url"
 }
 
-resolve_git_source() {
+resolve_archive_source() {
   if [ "$INSTALL_REF" = "latest" ]; then
-    printf 'github:%s' "$REPO_SLUG"
+    printf 'https://codeload.github.com/%s/tar.gz/main' "$REPO_SLUG"
   else
-    printf 'github:%s#%s' "$REPO_SLUG" "$INSTALL_REF"
+    printf 'https://codeload.github.com/%s/tar.gz/%s' "$REPO_SLUG" "$INSTALL_REF"
   fi
 }
 
@@ -140,19 +140,19 @@ main() {
       if install_source="$(resolve_release_source)"; then
         :
       else
-        install_source="$(resolve_git_source)"
+        install_source="$(resolve_archive_source)"
         log "no installable GitHub Release package found; falling back to ${install_source}"
       fi
       ;;
     release)
       install_source="$(resolve_release_source)" || fail "no installable GitHub Release package found for ref '${INSTALL_REF}'"
       ;;
-    git)
-      install_source="$(resolve_git_source)"
-      log "using GitHub repository source ${install_source}"
+    archive)
+      install_source="$(resolve_archive_source)"
+      log "using GitHub archive source ${install_source}"
       ;;
     *)
-      fail "unsupported BBCLI_INSTALL_MODE '${INSTALL_MODE}' (expected auto, release, or git)"
+      fail "unsupported BBCLI_INSTALL_MODE '${INSTALL_MODE}' (expected auto, release, or archive)"
       ;;
   esac
 
