@@ -82,6 +82,7 @@ type SearchState = {
 
 type AccountField = "name" | "value" | "note";
 type AccountInputMode = "cookie" | "cookieFile";
+type AccountMessageTone = "success" | "warning" | "error" | "info";
 
 type AccountFormState = {
   activeField: AccountField;
@@ -92,6 +93,7 @@ type AccountFormState = {
   makeDefault: boolean;
   busy: boolean;
   message?: string;
+  messageTone?: AccountMessageTone;
   existingAccounts: string[];
   defaultAccount?: string;
 };
@@ -147,12 +149,13 @@ const HOME_TABS: Array<{
 const EMPTY_ACCOUNT_FORM: AccountFormState = {
   activeField: "name",
   inputMode: "cookie",
-  name: "",
+  name: "main",
   value: "",
   note: "",
   makeDefault: true,
   busy: false,
   message: undefined,
+  messageTone: undefined,
   existingAccounts: [],
   defaultAccount: undefined,
 };
@@ -255,6 +258,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
         setAccountForm((current) => ({
           ...current,
           message: message,
+          messageTone: "error",
         }));
       });
     });
@@ -755,6 +759,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
         ...current,
         inputMode: current.inputMode === "cookie" ? "cookieFile" : "cookie",
         message: undefined,
+        messageTone: undefined,
       }));
       return;
     }
@@ -764,6 +769,27 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
         ...current,
         makeDefault: !current.makeDefault,
         message: undefined,
+        messageTone: undefined,
+      }));
+      return;
+    }
+
+    if (key.upArrow) {
+      setAccountForm((current) => ({
+        ...current,
+        activeField: previousAccountField(current.activeField),
+        message: undefined,
+        messageTone: undefined,
+      }));
+      return;
+    }
+
+    if (key.downArrow) {
+      setAccountForm((current) => ({
+        ...current,
+        activeField: nextAccountField(current.activeField),
+        message: undefined,
+        messageTone: undefined,
       }));
       return;
     }
@@ -773,6 +799,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
         ...current,
         activeField: nextAccountField(current.activeField),
         message: undefined,
+        messageTone: undefined,
       }));
       return;
     }
@@ -823,6 +850,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
       value: "",
       note: "",
       message: undefined,
+      messageTone: undefined,
     }));
   }
 
@@ -862,6 +890,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
       setAccountForm((current) => ({
         ...current,
         message: "请先输入账号名称。",
+        messageTone: "warning",
       }));
       return;
     }
@@ -870,6 +899,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
       setAccountForm((current) => ({
         ...current,
         message: current.inputMode === "cookie" ? "请先粘贴 Cookie。" : "请先输入 Cookie 文件路径。",
+        messageTone: "warning",
       }));
       return;
     }
@@ -878,6 +908,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
       ...current,
       busy: true,
       message: current.inputMode === "cookie" ? "正在根据粘贴的 Cookie 绑定账号..." : "正在根据 Cookie 文件绑定账号...",
+      messageTone: "info",
     }));
 
     try {
@@ -902,6 +933,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
         note: "",
         activeField: "name",
         message: `已绑定 ${result.account.provider}:${result.account.name}。`,
+        messageTone: "success",
       }));
       setHomeDataKey((value) => value + 1);
       setRecommendationKey((value) => value + 1);
@@ -911,6 +943,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
         ...current,
         busy: false,
         message,
+        messageTone: "error",
       }));
     }
   }
@@ -1059,7 +1092,7 @@ function HomeScreen({
       {isInteractive && view === "workspace" && tab === "discover" ? <Text dimColor>↑↓ 选视频  ·  Enter 打开  ·  r 刷新  ·  b 返回</Text> : null}
       {isInteractive && view === "workspace" && tab === "search" ? <Text dimColor>输入后回车  ·  ↑↓ 选结果  ·  Esc 返回</Text> : null}
       {isInteractive && view === "workspace" && tab === "library" ? <Text dimColor>Esc 或 b 返回</Text> : null}
-      {isInteractive && view === "workspace" && tab === "accounts" ? <Text dimColor>{'[`] 切平台  ·  Tab 切字段  ·  Enter 保存  ·  Esc 返回'}</Text> : null}
+      {isInteractive && view === "workspace" && tab === "accounts" ? <Text dimColor>{'[ ] 平台  ·  ↑↓ / Tab 字段  ·  m 模式  ·  d 默认  ·  Enter 保存  ·  Esc 返回'}</Text> : null}
     </Box>
   );
 }
@@ -1215,25 +1248,72 @@ function AccountPanel({
     (connector) => !liveConnectors.some((provider) => provider.id === connector.id),
   );
   const accountConnectors = [...liveConnectors, ...plannedConnectors];
+  const activeConnector = accountConnectors.find((connector) => connector.id === accountProviderId);
+  const hasAccounts = state.existingAccounts.length > 0;
 
   return (
     <Box flexDirection="column">
       <CompactConnectorRow items={accountConnectors} activeId={accountProviderId} />
+      {activeConnector?.note ? <Text dimColor>{activeConnector.note}</Text> : null}
       <Newline />
-      <Text color="green">{`绑定账号  ·  ${providerLabel}`}</Text>
+      <Box flexDirection="column" borderStyle="round" borderColor="green" paddingX={1}>
+        <Text color="green">{`绑定账号  ·  ${providerLabel}`}</Text>
+        <Text dimColor>把登录态保存在这里，后续视频、阅读和搜索能力都能直接复用。</Text>
+      </Box>
       <Newline />
       <FieldGroup title="已绑定">
-        <Text dimColor>{state.existingAccounts.length > 0 ? `${state.existingAccounts.join("、")}${state.defaultAccount ? `  ·  默认 ${state.defaultAccount}` : ""}` : "当前还没有已绑定账号。"}</Text>
+        {hasAccounts ? (
+          <Box>
+            {state.existingAccounts.map((accountName, index) => (
+              <React.Fragment key={accountName}>
+                <InlinePill
+                  label={state.defaultAccount === accountName ? `${accountName} · 默认` : accountName}
+                  tone={state.defaultAccount === accountName ? "green" : "cyan"}
+                />
+                {index < state.existingAccounts.length - 1 ? <Text> </Text> : null}
+              </React.Fragment>
+            ))}
+          </Box>
+        ) : (
+          <Text dimColor>当前还没有已绑定账号。</Text>
+        )}
+      </FieldGroup>
+      <Newline />
+      <FieldGroup title="开关">
+        <Box>
+          <InlinePill label="粘贴 Cookie" tone={state.inputMode === "cookie" ? "cyan" : "gray"} />
+          <Text> </Text>
+          <InlinePill label="Cookie 文件" tone={state.inputMode === "cookieFile" ? "cyan" : "gray"} />
+          <Text> </Text>
+          <InlinePill label={state.makeDefault ? "设为默认" : "不设默认"} tone={state.makeDefault ? "green" : "gray"} />
+        </Box>
       </FieldGroup>
       <Newline />
       <FieldGroup title="绑定表单">
-        <FormField label="账号名" value={state.name || "main"} selected={state.activeField === "name"} />
-        <Text dimColor>{`模式 ${state.inputMode === "cookie" ? "粘贴 Cookie" : "Cookie 文件路径"}  ·  默认 ${state.makeDefault ? "是" : "否"}`}</Text>
-        <FormField label={state.inputMode === "cookie" ? "Cookie" : "Cookie 文件"} value={formatAccountValue(state.inputMode, state.value)} selected={state.activeField === "value"} />
-        <FormField label="备注" value={state.note || "可选"} selected={state.activeField === "note"} />
+        <FormField
+          label="账号名"
+          value={state.name}
+          placeholder="main"
+          hint="给这个身份起一个好记的名字。"
+          selected={state.activeField === "name"}
+        />
+        <FormField
+          label={state.inputMode === "cookie" ? "Cookie" : "Cookie 文件"}
+          value={state.value}
+          placeholder={state.inputMode === "cookie" ? "在这里粘贴 Cookie" : "./bilibili.cookies"}
+          hint={state.inputMode === "cookie" ? "直接粘贴浏览器里的 Cookie 字符串。" : "填本地 Cookie 文件路径，支持 Netscape 格式。"}
+          selected={state.activeField === "value"}
+          displayValue={formatAccountValue(state.inputMode, state.value)}
+        />
+        <FormField
+          label="备注"
+          value={state.note}
+          placeholder="可选"
+          hint="比如工作号、主账号、测试号。"
+          selected={state.activeField === "note"}
+        />
       </FieldGroup>
-      {state.busy ? <Text dimColor>处理中...</Text> : null}
-      {state.message ? <Text color="yellow">{state.message}</Text> : null}
+      {state.message ? <Text color={formatAccountMessageColor(state.messageTone)}>{state.message}</Text> : null}
     </Box>
   );
 }
@@ -1261,8 +1341,9 @@ function MediaListItem({
 
 function FieldGroup({title, children}: {title: string; children: React.ReactNode}) {
   return (
-    <Box flexDirection="column">
-      <Text dimColor>{`[ ${title} ]`}</Text>
+    <Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1}>
+      <Text dimColor>{title}</Text>
+      <Newline />
       {children}
     </Box>
   );
@@ -1271,13 +1352,54 @@ function FieldGroup({title, children}: {title: string; children: React.ReactNode
 function FormField({
   label,
   value,
+  displayValue,
+  placeholder,
+  hint,
   selected,
 }: {
   label: string;
   value: string;
+  displayValue?: string;
+  placeholder: string;
+  hint: string;
   selected: boolean;
 }) {
-  return <Text color={selected ? "yellow" : undefined}>{`${selected ? ">" : " "} ${label}：${value}`}</Text>;
+  const shownValue = displayValue ?? value;
+  const empty = value.length === 0;
+
+  return (
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={selected ? "cyan" : "gray"}
+      paddingX={1}
+      marginBottom={1}
+    >
+      <Text color={selected ? "cyan" : "gray"}>{`${selected ? "当前字段" : "字段"} · ${label}`}</Text>
+      <Text color={empty ? "gray" : selected ? "yellow" : undefined} bold={selected && !empty}>
+        {shownValue || placeholder}
+      </Text>
+      <Text dimColor>{hint}</Text>
+    </Box>
+  );
+}
+
+function InlinePill({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: "cyan" | "green" | "gray";
+}) {
+  return (
+    <Text
+      backgroundColor={tone === "gray" ? undefined : tone}
+      color={tone === "gray" ? "gray" : "black"}
+      dimColor={tone === "gray"}
+    >
+      {` ${label} `}
+    </Text>
+  );
 }
 
 function CompactConnectorRow({
@@ -1487,6 +1609,18 @@ function nextAccountField(field: AccountField): AccountField {
   return "name";
 }
 
+function previousAccountField(field: AccountField): AccountField {
+  if (field === "name") {
+    return "note";
+  }
+
+  if (field === "value") {
+    return "name";
+  }
+
+  return "value";
+}
+
 function getAccountFieldValue(state: AccountFormState, field: AccountField): string {
   if (field === "name") {
     return state.name;
@@ -1505,6 +1639,7 @@ function updateAccountField(state: AccountFormState, field: AccountField, value:
       ...state,
       name: value,
       message: undefined,
+      messageTone: undefined,
     };
   }
 
@@ -1513,6 +1648,7 @@ function updateAccountField(state: AccountFormState, field: AccountField, value:
       ...state,
       value: value,
       message: undefined,
+      messageTone: undefined,
     };
   }
 
@@ -1520,12 +1656,13 @@ function updateAccountField(state: AccountFormState, field: AccountField, value:
     ...state,
     note: value,
     message: undefined,
+    messageTone: undefined,
   };
 }
 
 function formatAccountValue(mode: AccountInputMode, value: string): string {
   if (!value) {
-    return mode === "cookie" ? "在这里粘贴 Cookie" : "./bilibili.cookies";
+    return mode === "cookie" ? "" : "";
   }
 
   if (mode === "cookieFile") {
@@ -1537,6 +1674,22 @@ function formatAccountValue(mode: AccountInputMode, value: string): string {
   }
 
   return `${value.slice(0, 4)}...${value.slice(-4)}`;
+}
+
+function formatAccountMessageColor(tone: AccountMessageTone | undefined): "green" | "yellow" | "red" | "cyan" {
+  if (tone === "success") {
+    return "green";
+  }
+
+  if (tone === "error") {
+    return "red";
+  }
+
+  if (tone === "warning") {
+    return "yellow";
+  }
+
+  return "cyan";
 }
 
 function formatDuration(seconds: number): string {

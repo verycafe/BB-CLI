@@ -52,12 +52,13 @@ const HOME_TABS = [
 const EMPTY_ACCOUNT_FORM = {
     activeField: "name",
     inputMode: "cookie",
-    name: "",
+    name: "main",
     value: "",
     note: "",
     makeDefault: true,
     busy: false,
     message: undefined,
+    messageTone: undefined,
     existingAccounts: [],
     defaultAccount: undefined,
 };
@@ -146,6 +147,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
                 setAccountForm((current) => ({
                     ...current,
                     message: message,
+                    messageTone: "error",
                 }));
             });
         });
@@ -579,6 +581,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
                 ...current,
                 inputMode: current.inputMode === "cookie" ? "cookieFile" : "cookie",
                 message: undefined,
+                messageTone: undefined,
             }));
             return;
         }
@@ -587,6 +590,25 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
                 ...current,
                 makeDefault: !current.makeDefault,
                 message: undefined,
+                messageTone: undefined,
+            }));
+            return;
+        }
+        if (key.upArrow) {
+            setAccountForm((current) => ({
+                ...current,
+                activeField: previousAccountField(current.activeField),
+                message: undefined,
+                messageTone: undefined,
+            }));
+            return;
+        }
+        if (key.downArrow) {
+            setAccountForm((current) => ({
+                ...current,
+                activeField: nextAccountField(current.activeField),
+                message: undefined,
+                messageTone: undefined,
             }));
             return;
         }
@@ -595,6 +617,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
                 ...current,
                 activeField: nextAccountField(current.activeField),
                 message: undefined,
+                messageTone: undefined,
             }));
             return;
         }
@@ -634,6 +657,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
             value: "",
             note: "",
             message: undefined,
+            messageTone: undefined,
         }));
     }
     async function runSearch(query) {
@@ -671,6 +695,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
             setAccountForm((current) => ({
                 ...current,
                 message: "请先输入账号名称。",
+                messageTone: "warning",
             }));
             return;
         }
@@ -678,6 +703,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
             setAccountForm((current) => ({
                 ...current,
                 message: current.inputMode === "cookie" ? "请先粘贴 Cookie。" : "请先输入 Cookie 文件路径。",
+                messageTone: "warning",
             }));
             return;
         }
@@ -685,6 +711,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
             ...current,
             busy: true,
             message: current.inputMode === "cookie" ? "正在根据粘贴的 Cookie 绑定账号..." : "正在根据 Cookie 文件绑定账号...",
+            messageTone: "info",
         }));
         try {
             const cookieValue = accountForm.inputMode === "cookie"
@@ -706,6 +733,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
                 note: "",
                 activeField: "name",
                 message: `已绑定 ${result.account.provider}:${result.account.name}。`,
+                messageTone: "success",
             }));
             setHomeDataKey((value) => value + 1);
             setRecommendationKey((value) => value + 1);
@@ -716,6 +744,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
                 ...current,
                 busy: false,
                 message,
+                messageTone: "error",
             }));
         }
     }
@@ -763,7 +792,7 @@ function HomeScreen({ view, tab, menuIndex, providerLabel, inspectOnly, provider
                 ? "个人书架"
                 : providerLabel;
     const activeMenu = HOME_TABS[menuIndex];
-    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(BrandHeader, { activeTab: view === "menu" ? undefined : tab, providerLabel: activeLaneLabel, inspectOnly: view === "workspace" ? inspectOnly : false }), _jsx(Newline, {}), view === "menu" ? _jsx(MenuScreen, { selectedIndex: menuIndex }) : null, view === "workspace" ? _jsx(WorkspaceHeader, { tab: tab, providerLabel: activeLaneLabel }) : null, view === "workspace" ? _jsx(Newline, {}) : null, view === "workspace" && tab === "discover" ? _jsx(RecommendationPanel, { state: recommendations }) : null, view === "workspace" && tab === "search" ? _jsx(SearchPanel, { state: search }) : null, view === "workspace" && tab === "library" ? _jsx(LibraryPanel, { providers: providers }) : null, view === "workspace" && tab === "accounts" ? _jsx(AccountPanel, { state: accountForm, providerLabel: accountProviderLabel, accountProviderId: accountProviderId, providers: providers }) : null, _jsx(Newline, {}), !isInteractive ? _jsx(Text, { dimColor: true, children: "\u5F53\u524D\u7EC8\u7AEF\u4E0D\u652F\u6301\u4EA4\u4E92\u8F93\u5165\uFF0C\u8BF7\u5728\u6B63\u5E38\u7EC8\u7AEF\u91CC\u8FD0\u884C BBCLI\u3002" }) : null, isInteractive && view === "menu" ? _jsx(Text, { dimColor: true, children: `${activeMenu?.label ?? "菜单"}  ·  ← → 切换  ·  Enter 进入  ·  直接输入可搜索` }) : null, isInteractive && view === "workspace" && tab === "discover" ? _jsx(Text, { dimColor: true, children: "\u2191\u2193 \u9009\u89C6\u9891  \u00B7  Enter \u6253\u5F00  \u00B7  r \u5237\u65B0  \u00B7  b \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "search" ? _jsx(Text, { dimColor: true, children: "\u8F93\u5165\u540E\u56DE\u8F66  \u00B7  \u2191\u2193 \u9009\u7ED3\u679C  \u00B7  Esc \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "library" ? _jsx(Text, { dimColor: true, children: "Esc \u6216 b \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "accounts" ? _jsx(Text, { dimColor: true, children: '[`] 切平台  ·  Tab 切字段  ·  Enter 保存  ·  Esc 返回' }) : null] }));
+    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(BrandHeader, { activeTab: view === "menu" ? undefined : tab, providerLabel: activeLaneLabel, inspectOnly: view === "workspace" ? inspectOnly : false }), _jsx(Newline, {}), view === "menu" ? _jsx(MenuScreen, { selectedIndex: menuIndex }) : null, view === "workspace" ? _jsx(WorkspaceHeader, { tab: tab, providerLabel: activeLaneLabel }) : null, view === "workspace" ? _jsx(Newline, {}) : null, view === "workspace" && tab === "discover" ? _jsx(RecommendationPanel, { state: recommendations }) : null, view === "workspace" && tab === "search" ? _jsx(SearchPanel, { state: search }) : null, view === "workspace" && tab === "library" ? _jsx(LibraryPanel, { providers: providers }) : null, view === "workspace" && tab === "accounts" ? _jsx(AccountPanel, { state: accountForm, providerLabel: accountProviderLabel, accountProviderId: accountProviderId, providers: providers }) : null, _jsx(Newline, {}), !isInteractive ? _jsx(Text, { dimColor: true, children: "\u5F53\u524D\u7EC8\u7AEF\u4E0D\u652F\u6301\u4EA4\u4E92\u8F93\u5165\uFF0C\u8BF7\u5728\u6B63\u5E38\u7EC8\u7AEF\u91CC\u8FD0\u884C BBCLI\u3002" }) : null, isInteractive && view === "menu" ? _jsx(Text, { dimColor: true, children: `${activeMenu?.label ?? "菜单"}  ·  ← → 切换  ·  Enter 进入  ·  直接输入可搜索` }) : null, isInteractive && view === "workspace" && tab === "discover" ? _jsx(Text, { dimColor: true, children: "\u2191\u2193 \u9009\u89C6\u9891  \u00B7  Enter \u6253\u5F00  \u00B7  r \u5237\u65B0  \u00B7  b \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "search" ? _jsx(Text, { dimColor: true, children: "\u8F93\u5165\u540E\u56DE\u8F66  \u00B7  \u2191\u2193 \u9009\u7ED3\u679C  \u00B7  Esc \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "library" ? _jsx(Text, { dimColor: true, children: "Esc \u6216 b \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "accounts" ? _jsx(Text, { dimColor: true, children: '[ ] 平台  ·  ↑↓ / Tab 字段  ·  m 模式  ·  d 默认  ·  Enter 保存  ·  Esc 返回' }) : null] }));
 }
 function MenuScreen({ selectedIndex }) {
     const activeItem = HOME_TABS[selectedIndex];
@@ -810,16 +839,23 @@ function AccountPanel({ state, providerLabel, accountProviderId, providers, }) {
     }));
     const plannedConnectors = ACCOUNT_CONNECTORS.filter((connector) => !liveConnectors.some((provider) => provider.id === connector.id));
     const accountConnectors = [...liveConnectors, ...plannedConnectors];
-    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(CompactConnectorRow, { items: accountConnectors, activeId: accountProviderId }), _jsx(Newline, {}), _jsx(Text, { color: "green", children: `绑定账号  ·  ${providerLabel}` }), _jsx(Newline, {}), _jsx(FieldGroup, { title: "\u5DF2\u7ED1\u5B9A", children: _jsx(Text, { dimColor: true, children: state.existingAccounts.length > 0 ? `${state.existingAccounts.join("、")}${state.defaultAccount ? `  ·  默认 ${state.defaultAccount}` : ""}` : "当前还没有已绑定账号。" }) }), _jsx(Newline, {}), _jsxs(FieldGroup, { title: "\u7ED1\u5B9A\u8868\u5355", children: [_jsx(FormField, { label: "\u8D26\u53F7\u540D", value: state.name || "main", selected: state.activeField === "name" }), _jsx(Text, { dimColor: true, children: `模式 ${state.inputMode === "cookie" ? "粘贴 Cookie" : "Cookie 文件路径"}  ·  默认 ${state.makeDefault ? "是" : "否"}` }), _jsx(FormField, { label: state.inputMode === "cookie" ? "Cookie" : "Cookie 文件", value: formatAccountValue(state.inputMode, state.value), selected: state.activeField === "value" }), _jsx(FormField, { label: "\u5907\u6CE8", value: state.note || "可选", selected: state.activeField === "note" })] }), state.busy ? _jsx(Text, { dimColor: true, children: "\u5904\u7406\u4E2D..." }) : null, state.message ? _jsx(Text, { color: "yellow", children: state.message }) : null] }));
+    const activeConnector = accountConnectors.find((connector) => connector.id === accountProviderId);
+    const hasAccounts = state.existingAccounts.length > 0;
+    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(CompactConnectorRow, { items: accountConnectors, activeId: accountProviderId }), activeConnector?.note ? _jsx(Text, { dimColor: true, children: activeConnector.note }) : null, _jsx(Newline, {}), _jsxs(Box, { flexDirection: "column", borderStyle: "round", borderColor: "green", paddingX: 1, children: [_jsx(Text, { color: "green", children: `绑定账号  ·  ${providerLabel}` }), _jsx(Text, { dimColor: true, children: "\u628A\u767B\u5F55\u6001\u4FDD\u5B58\u5728\u8FD9\u91CC\uFF0C\u540E\u7EED\u89C6\u9891\u3001\u9605\u8BFB\u548C\u641C\u7D22\u80FD\u529B\u90FD\u80FD\u76F4\u63A5\u590D\u7528\u3002" })] }), _jsx(Newline, {}), _jsx(FieldGroup, { title: "\u5DF2\u7ED1\u5B9A", children: hasAccounts ? (_jsx(Box, { children: state.existingAccounts.map((accountName, index) => (_jsxs(React.Fragment, { children: [_jsx(InlinePill, { label: state.defaultAccount === accountName ? `${accountName} · 默认` : accountName, tone: state.defaultAccount === accountName ? "green" : "cyan" }), index < state.existingAccounts.length - 1 ? _jsx(Text, { children: " " }) : null] }, accountName))) })) : (_jsx(Text, { dimColor: true, children: "\u5F53\u524D\u8FD8\u6CA1\u6709\u5DF2\u7ED1\u5B9A\u8D26\u53F7\u3002" })) }), _jsx(Newline, {}), _jsx(FieldGroup, { title: "\u5F00\u5173", children: _jsxs(Box, { children: [_jsx(InlinePill, { label: "\u7C98\u8D34 Cookie", tone: state.inputMode === "cookie" ? "cyan" : "gray" }), _jsx(Text, { children: " " }), _jsx(InlinePill, { label: "Cookie \u6587\u4EF6", tone: state.inputMode === "cookieFile" ? "cyan" : "gray" }), _jsx(Text, { children: " " }), _jsx(InlinePill, { label: state.makeDefault ? "设为默认" : "不设默认", tone: state.makeDefault ? "green" : "gray" })] }) }), _jsx(Newline, {}), _jsxs(FieldGroup, { title: "\u7ED1\u5B9A\u8868\u5355", children: [_jsx(FormField, { label: "\u8D26\u53F7\u540D", value: state.name, placeholder: "main", hint: "\u7ED9\u8FD9\u4E2A\u8EAB\u4EFD\u8D77\u4E00\u4E2A\u597D\u8BB0\u7684\u540D\u5B57\u3002", selected: state.activeField === "name" }), _jsx(FormField, { label: state.inputMode === "cookie" ? "Cookie" : "Cookie 文件", value: state.value, placeholder: state.inputMode === "cookie" ? "在这里粘贴 Cookie" : "./bilibili.cookies", hint: state.inputMode === "cookie" ? "直接粘贴浏览器里的 Cookie 字符串。" : "填本地 Cookie 文件路径，支持 Netscape 格式。", selected: state.activeField === "value", displayValue: formatAccountValue(state.inputMode, state.value) }), _jsx(FormField, { label: "\u5907\u6CE8", value: state.note, placeholder: "\u53EF\u9009", hint: "\u6BD4\u5982\u5DE5\u4F5C\u53F7\u3001\u4E3B\u8D26\u53F7\u3001\u6D4B\u8BD5\u53F7\u3002", selected: state.activeField === "note" })] }), state.message ? _jsx(Text, { color: formatAccountMessageColor(state.messageTone), children: state.message }) : null] }));
 }
 function MediaListItem({ item, selected, }) {
     return (_jsxs(Box, { flexDirection: "column", marginBottom: 1, children: [_jsx(Text, { backgroundColor: selected ? "cyan" : undefined, color: selected ? "black" : undefined, bold: selected, children: `${selected ? " 当前 " : "  "}${item.title}` }), _jsx(Text, { dimColor: true, children: `${selected ? "  " : "    "}${item.ownerName}  ·  ${formatDuration(item.durationSeconds ?? 0)}  ·  ${formatCount(item.viewCount)}` })] }));
 }
 function FieldGroup({ title, children }) {
-    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { dimColor: true, children: `[ ${title} ]` }), children] }));
+    return (_jsxs(Box, { flexDirection: "column", borderStyle: "round", borderColor: "gray", paddingX: 1, children: [_jsx(Text, { dimColor: true, children: title }), _jsx(Newline, {}), children] }));
 }
-function FormField({ label, value, selected, }) {
-    return _jsx(Text, { color: selected ? "yellow" : undefined, children: `${selected ? ">" : " "} ${label}：${value}` });
+function FormField({ label, value, displayValue, placeholder, hint, selected, }) {
+    const shownValue = displayValue ?? value;
+    const empty = value.length === 0;
+    return (_jsxs(Box, { flexDirection: "column", borderStyle: "round", borderColor: selected ? "cyan" : "gray", paddingX: 1, marginBottom: 1, children: [_jsx(Text, { color: selected ? "cyan" : "gray", children: `${selected ? "当前字段" : "字段"} · ${label}` }), _jsx(Text, { color: empty ? "gray" : selected ? "yellow" : undefined, bold: selected && !empty, children: shownValue || placeholder }), _jsx(Text, { dimColor: true, children: hint })] }));
+}
+function InlinePill({ label, tone, }) {
+    return (_jsx(Text, { backgroundColor: tone === "gray" ? undefined : tone, color: tone === "gray" ? "gray" : "black", dimColor: tone === "gray", children: ` ${label} ` }));
 }
 function CompactConnectorRow({ items, activeId, }) {
     return (_jsx(Box, { children: items.map((item, index) => {
@@ -882,6 +918,15 @@ function nextAccountField(field) {
     }
     return "name";
 }
+function previousAccountField(field) {
+    if (field === "name") {
+        return "note";
+    }
+    if (field === "value") {
+        return "name";
+    }
+    return "value";
+}
 function getAccountFieldValue(state, field) {
     if (field === "name") {
         return state.name;
@@ -897,6 +942,7 @@ function updateAccountField(state, field, value) {
             ...state,
             name: value,
             message: undefined,
+            messageTone: undefined,
         };
     }
     if (field === "value") {
@@ -904,17 +950,19 @@ function updateAccountField(state, field, value) {
             ...state,
             value: value,
             message: undefined,
+            messageTone: undefined,
         };
     }
     return {
         ...state,
         note: value,
         message: undefined,
+        messageTone: undefined,
     };
 }
 function formatAccountValue(mode, value) {
     if (!value) {
-        return mode === "cookie" ? "在这里粘贴 Cookie" : "./bilibili.cookies";
+        return mode === "cookie" ? "" : "";
     }
     if (mode === "cookieFile") {
         return value;
@@ -923,6 +971,18 @@ function formatAccountValue(mode, value) {
         return "*".repeat(value.length);
     }
     return `${value.slice(0, 4)}...${value.slice(-4)}`;
+}
+function formatAccountMessageColor(tone) {
+    if (tone === "success") {
+        return "green";
+    }
+    if (tone === "error") {
+        return "red";
+    }
+    if (tone === "warning") {
+        return "yellow";
+    }
+    return "cyan";
 }
 function formatDuration(seconds) {
     const total = Math.max(0, seconds);
