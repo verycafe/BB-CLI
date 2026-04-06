@@ -8,7 +8,7 @@ import { parseCookieInput } from "./lib/cookies.js";
 import { listKnownProviders, listRecommendedMedia, loadMediaSession, resolveMediaTarget, searchMedia, validateProviderAccountHeaders, } from "./lib/providers.js";
 import { buildLaunchPlan, detectPlayerSupport, launchPlayer, } from "./lib/player.js";
 import { ACCOUNT_CONNECTORS, LIBRARY_CONNECTORS, } from "./lib/workspace-catalog.js";
-import { listLocalBooks, loadLocalBook, } from "./lib/local-library.js";
+import { addLocalLibrarySource, listLocalBooks, loadLocalBook, } from "./lib/local-library.js";
 const HOME_TABS = [
     {
         id: "discover",
@@ -94,7 +94,7 @@ const HOME_TABS = [
             {
                 id: "library-local-books",
                 label: "本地书架",
-                note: "扫描当前目录、Books、文稿和下载目录里的书籍。",
+                note: "添加文件夹或单本书，把它们纳入终端书架。",
                 status: "live",
                 action: {
                     type: "open-workspace",
@@ -212,9 +212,11 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
     });
     const [library, setLibrary] = useState({
         loading: false,
+        sources: [],
         books: [],
         selectedIndex: 0,
-        roots: [],
+        addMode: false,
+        draftPath: "",
     });
     const [accountForm, setAccountForm] = useState(EMPTY_ACCOUNT_FORM);
     const [state, setState] = useState(() => (target ? { status: "loading" } : { status: "home" }));
@@ -353,7 +355,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
             setLibrary((current) => ({
                 ...current,
                 loading: true,
-                message: current.books.length > 0 ? "正在刷新本地书架..." : "正在扫描本地书架...",
+                message: current.sources.length > 0 ? "正在刷新书架..." : "正在读取书架来源...",
             }));
         });
         void (async () => {
@@ -364,12 +366,16 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
             startTransition(() => {
                 setLibrary((current) => ({
                     loading: false,
+                    sources: snapshot.sources,
                     books: snapshot.books,
-                    roots: snapshot.roots,
                     selectedIndex: Math.min(current.selectedIndex, Math.max(0, snapshot.books.length - 1)),
-                    message: snapshot.books.length === 0
-                        ? "还没有找到本地书籍。可以把 EPUB、PDF、TXT、Markdown、HTML、DOCX 放到当前目录、Books、文稿、下载或桌面。"
-                        : `已找到 ${snapshot.books.length} 本本地书，回车即可开始阅读。`,
+                    addMode: current.addMode,
+                    draftPath: current.draftPath,
+                    message: snapshot.sources.length === 0
+                        ? "还没有添加书架来源。按 a 粘贴或拖拽文件/文件夹路径，按 . 直接添加当前目录。"
+                        : snapshot.books.length === 0
+                            ? "已加载书架来源，但暂时没有找到可阅读文件。"
+                            : `已找到 ${snapshot.books.length} 本书，回车即可开始阅读。`,
                 }));
             });
         })().catch((error) => {
@@ -608,7 +614,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
             setLaunchVo((value) => nextVo(value));
             return;
         }
-        if (homeTab !== "search" && homeTab !== "accounts" && isPlainTextInput(inputKey, key)) {
+        if (homeTab === "discover" && isPlainTextInput(inputKey, key)) {
             openHomeWorkspace("search");
             setSearch((current) => ({
                 ...current,
@@ -822,6 +828,15 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
     }
     function handleLibraryInput(inputKey, key) {
         if (key.escape) {
+            if (library.addMode) {
+                setLibrary((current) => ({
+                    ...current,
+                    addMode: false,
+                    draftPath: "",
+                    message: current.sources.length > 0 ? "已取消添加来源。" : "还没有添加书架来源。",
+                }));
+                return;
+            }
             setHomeView("menu");
             return;
         }
@@ -829,6 +844,55 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
             if (inputKey === "r") {
                 setLibraryKey((value) => value + 1);
             }
+            return;
+        }
+        if (library.addMode) {
+            if (key.backspace || key.delete) {
+                setLibrary((current) => ({
+                    ...current,
+                    draftPath: current.draftPath.slice(0, -1),
+                    message: undefined,
+                }));
+                return;
+            }
+            if (key.ctrl && inputKey === "u") {
+                setLibrary((current) => ({
+                    ...current,
+                    draftPath: "",
+                    message: undefined,
+                }));
+                return;
+            }
+            if (key.return) {
+                void runLibraryAddPath(library.draftPath || ".");
+                return;
+            }
+            if (isPlainTextInput(inputKey, key)) {
+                const submittedWithPaste = /[\r\n]/.test(inputKey);
+                const nextDraftPath = `${library.draftPath}${inputKey.replace(/[\r\n]+/g, "")}`;
+                if (submittedWithPaste) {
+                    void runLibraryAddPath(nextDraftPath || ".");
+                    return;
+                }
+                setLibrary((current) => ({
+                    ...current,
+                    draftPath: nextDraftPath,
+                    message: undefined,
+                }));
+            }
+            return;
+        }
+        if (inputKey === "a") {
+            setLibrary((current) => ({
+                ...current,
+                addMode: true,
+                draftPath: "",
+                message: "输入、粘贴或直接拖拽文件/文件夹路径，然后按回车。",
+            }));
+            return;
+        }
+        if (inputKey === ".") {
+            void runLibraryAddPath(".");
             return;
         }
         if (key.upArrow || inputKey === "k") {
@@ -854,6 +918,44 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
             if (book) {
                 void openLocalBookInReader(book);
             }
+            else {
+                setLibrary((current) => ({
+                    ...current,
+                    message: current.sources.length === 0
+                        ? "先添加一个文件夹或文件，再开始阅读。"
+                        : "当前来源里还没有可阅读的书。",
+                }));
+            }
+        }
+    }
+    async function runLibraryAddPath(inputPath) {
+        setLibrary((current) => ({
+            ...current,
+            loading: true,
+            addMode: false,
+            draftPath: "",
+            message: inputPath.trim() === "."
+                ? "正在把当前目录加入书架..."
+                : "正在把这个路径加入书架...",
+        }));
+        try {
+            const source = await addLocalLibrarySource(inputPath);
+            setLibrary((current) => ({
+                ...current,
+                loading: false,
+                message: `已添加${source.kind === "directory" ? "文件夹" : "文件"}：${source.path}`,
+            }));
+            setLibraryKey((value) => value + 1);
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            setLibrary((current) => ({
+                ...current,
+                loading: false,
+                addMode: true,
+                draftPath: inputPath === "." ? "" : inputPath,
+                message,
+            }));
         }
     }
     function handleAccountInput(inputKey, key) {
@@ -1169,7 +1271,7 @@ function HomeScreen({ view, tab, menuIndex, menuItemIndex, menuMessage, provider
                 ? "个人书架"
                 : providerLabel;
     const activeMenu = HOME_TABS[menuIndex];
-    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(BrandHeader, { activeTab: view === "menu" ? undefined : tab, providerLabel: activeLaneLabel, inspectOnly: view === "workspace" ? inspectOnly : false }), _jsx(Newline, {}), view === "menu" ? _jsx(MenuScreen, { selectedIndex: menuIndex, selectedItemIndex: menuItemIndex, message: menuMessage }) : null, view === "workspace" ? _jsx(WorkspaceHeader, { tab: tab, providerLabel: activeLaneLabel }) : null, view === "workspace" ? _jsx(Newline, {}) : null, view === "workspace" && tab === "discover" ? _jsx(RecommendationPanel, { state: recommendations }) : null, view === "workspace" && tab === "search" ? _jsx(SearchPanel, { state: search }) : null, view === "workspace" && tab === "library" ? _jsx(LibraryPanel, { state: library, providers: providers }) : null, view === "workspace" && tab === "accounts" ? _jsx(AccountPanel, { state: accountForm, providerLabel: accountProviderLabel, accountProviderId: accountProviderId, providers: providers }) : null, _jsx(Newline, {}), !isInteractive ? _jsx(Text, { dimColor: true, children: "\u5F53\u524D\u7EC8\u7AEF\u4E0D\u652F\u6301\u4EA4\u4E92\u8F93\u5165\uFF0C\u8BF7\u5728\u6B63\u5E38\u7EC8\u7AEF\u91CC\u8FD0\u884C BBCLI\u3002" }) : null, isInteractive && view === "menu" ? _jsx(Text, { dimColor: true, children: `${activeMenu?.label ?? "菜单"}  ·  ← → 切分类  ·  ↑↓ 选入口  ·  Enter 进入  ·  直接输入可搜索` }) : null, isInteractive && view === "workspace" && tab === "discover" ? _jsx(Text, { dimColor: true, children: "\u2191\u2193 \u9009\u89C6\u9891  \u00B7  Enter \u6253\u5F00  \u00B7  r \u5237\u65B0  \u00B7  b \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "search" ? _jsx(Text, { dimColor: true, children: "\u8F93\u5165\u540E\u56DE\u8F66  \u00B7  \u2191\u2193 \u9009\u7ED3\u679C  \u00B7  Esc \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "library" ? _jsx(Text, { dimColor: true, children: "\u2191\u2193 \u9009\u4E66  \u00B7  Enter \u9605\u8BFB  \u00B7  r \u5237\u65B0  \u00B7  Esc \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "accounts" ? _jsx(Text, { dimColor: true, children: '[ ] 平台  ·  ↑↓ / Tab 字段  ·  m 模式  ·  d 默认  ·  Enter 保存  ·  Esc 返回' }) : null] }));
+    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(BrandHeader, { activeTab: view === "menu" ? undefined : tab, providerLabel: activeLaneLabel, inspectOnly: view === "workspace" ? inspectOnly : false }), _jsx(Newline, {}), view === "menu" ? _jsx(MenuScreen, { selectedIndex: menuIndex, selectedItemIndex: menuItemIndex, message: menuMessage }) : null, view === "workspace" ? _jsx(WorkspaceHeader, { tab: tab, providerLabel: activeLaneLabel }) : null, view === "workspace" ? _jsx(Newline, {}) : null, view === "workspace" && tab === "discover" ? _jsx(RecommendationPanel, { state: recommendations }) : null, view === "workspace" && tab === "search" ? _jsx(SearchPanel, { state: search }) : null, view === "workspace" && tab === "library" ? _jsx(LibraryPanel, { state: library, providers: providers }) : null, view === "workspace" && tab === "accounts" ? _jsx(AccountPanel, { state: accountForm, providerLabel: accountProviderLabel, accountProviderId: accountProviderId, providers: providers }) : null, _jsx(Newline, {}), !isInteractive ? _jsx(Text, { dimColor: true, children: "\u5F53\u524D\u7EC8\u7AEF\u4E0D\u652F\u6301\u4EA4\u4E92\u8F93\u5165\uFF0C\u8BF7\u5728\u6B63\u5E38\u7EC8\u7AEF\u91CC\u8FD0\u884C BBCLI\u3002" }) : null, isInteractive && view === "menu" ? _jsx(Text, { dimColor: true, children: `${activeMenu?.label ?? "菜单"}  ·  ← → 切分类  ·  ↑↓ 选入口  ·  Enter 进入  ·  直接输入可搜索` }) : null, isInteractive && view === "workspace" && tab === "discover" ? _jsx(Text, { dimColor: true, children: "\u2191\u2193 \u9009\u89C6\u9891  \u00B7  Enter \u6253\u5F00  \u00B7  r \u5237\u65B0  \u00B7  b \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "search" ? _jsx(Text, { dimColor: true, children: "\u8F93\u5165\u540E\u56DE\u8F66  \u00B7  \u2191\u2193 \u9009\u7ED3\u679C  \u00B7  Esc \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "library" ? _jsx(Text, { dimColor: true, children: "\u2191\u2193 \u9009\u4E66  \u00B7  Enter \u9605\u8BFB  \u00B7  a \u6DFB\u52A0\u8DEF\u5F84  \u00B7  . \u6DFB\u52A0\u5F53\u524D\u76EE\u5F55  \u00B7  r \u5237\u65B0  \u00B7  Esc \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "accounts" ? _jsx(Text, { dimColor: true, children: '[ ] 平台  ·  ↑↓ / Tab 字段  ·  m 模式  ·  d 默认  ·  Enter 保存  ·  Esc 返回' }) : null] }));
 }
 function MenuScreen({ selectedIndex, selectedItemIndex, message, }) {
     const activeItem = HOME_TABS[selectedIndex];
@@ -1216,11 +1318,8 @@ function SearchPanel({ state }) {
 }
 function LibraryPanel({ state, providers, }) {
     const connected = providers.filter((provider) => provider.boundAccounts > 0);
-    const rootLabels = state.roots.map((root) => root.split(" · ")[0] ?? root);
-    const currentDirectory = state.roots
-        .find((root) => root.startsWith("当前目录 · "))
-        ?.replace("当前目录 · ", "");
-    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(CompactConnectorRow, { items: LIBRARY_CONNECTORS, activeId: "local-books" }), _jsx(Text, { dimColor: true, children: state.roots.length > 0 ? `扫描位置：${rootLabels.join(" / ")}` : "正在准备本地书架..." }), currentDirectory ? _jsx(Text, { dimColor: true, children: `当前目录：${truncatePath(currentDirectory, 72)}` }) : null, _jsx(Newline, {}), state.loading ? _jsx(Text, { dimColor: true, children: "\u6B63\u5728\u6574\u7406\u4F60\u7684\u672C\u5730\u4E66\u67B6..." }) : null, !state.loading && state.books.length === 0 ? _jsx(Text, { dimColor: true, children: state.message ?? "暂时没有找到可阅读的本地书。" }) : null, !state.loading && state.books.length > 0 ? (_jsxs(_Fragment, { children: [state.books.slice(0, 10).map((book, index) => (_jsx(BookListItem, { book: book, selected: index === state.selectedIndex }, book.id))), _jsx(Text, { dimColor: true, children: `当前已展示 ${Math.min(10, state.books.length)} / ${state.books.length} 本。` })] })) : null, state.message && state.books.length > 0 ? (_jsxs(_Fragment, { children: [_jsx(Newline, {}), _jsx(Text, { color: "yellow", children: state.message })] })) : null, _jsx(Newline, {}), _jsx(Text, { dimColor: true, children: "\u5DF2\u8FDE\u63A5\u8D26\u53F7" }), connected.length > 0 ? connected.map((provider) => (_jsx(Text, { children: `${provider.label}  |  账号 ${provider.boundAccounts}${provider.defaultAccount ? `  |  默认 ${provider.defaultAccount}` : ""}` }, provider.id))) : _jsx(Text, { dimColor: true, children: "\u4E66\u5E93\u9605\u8BFB\u4E0D\u4F9D\u8D56\u8D26\u53F7\uFF1B\u5982\u679C\u540E\u7EED\u9700\u8981\u540C\u6B65\u4E66\u67B6\uFF0C\u518D\u53BB\u201C\u8D26\u53F7\u201D\u91CC\u7ED1\u5B9A\u5E73\u53F0\u3002" })] }));
+    const visibleBooks = getVisibleWindow(state.books, state.selectedIndex, 8);
+    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(CompactConnectorRow, { items: LIBRARY_CONNECTORS, activeId: "local-books" }), _jsx(Text, { dimColor: true, children: state.sources.length > 0 ? `已添加来源 ${state.sources.length} 个` : "还没有添加任何书架来源。" }), state.sources.length > 0 ? (_jsxs(Box, { children: [state.sources.slice(0, 6).map((source, index) => (_jsxs(React.Fragment, { children: [_jsx(InlinePill, { label: `${source.kind === "directory" ? "文件夹" : "文件"} · ${source.label}`, tone: "cyan" }), index < Math.min(state.sources.length, 6) - 1 ? _jsx(Text, { children: " " }) : null] }, source.path))), state.sources.length > 6 ? _jsx(Text, { dimColor: true, children: `  还有 ${state.sources.length - 6} 个来源` }) : null] })) : null, _jsx(Newline, {}), state.addMode ? (_jsx(FieldGroup, { title: "\u6DFB\u52A0\u6765\u6E90", children: _jsx(FormField, { label: "\u8DEF\u5F84", value: state.draftPath, placeholder: "\u8F93\u5165\u3001\u7C98\u8D34\u6216\u62D6\u62FD\u6587\u4EF6/\u6587\u4EF6\u5939\u8DEF\u5F84\uFF1B\u7528 . \u4EE3\u8868\u5F53\u524D\u76EE\u5F55", hint: "Finder \u91CC\u628A\u6587\u4EF6\u6216\u6587\u4EF6\u5939\u76F4\u63A5\u62D6\u5230\u7EC8\u7AEF\uFF0C\u4E5F\u4F1A\u628A\u8DEF\u5F84\u8D34\u5230\u8FD9\u91CC\u3002", selected: true }) })) : null, state.loading ? _jsx(Text, { dimColor: true, children: "\u6B63\u5728\u6574\u7406\u4F60\u7684\u672C\u5730\u4E66\u67B6..." }) : null, !state.loading && state.books.length === 0 ? _jsx(Text, { dimColor: true, children: state.message ?? "暂时没有找到可阅读的本地书。" }) : null, !state.loading && state.books.length > 0 ? (_jsxs(_Fragment, { children: [visibleBooks.items.map((book, index) => (_jsx(BookListItem, { book: book, selected: visibleBooks.start + index === state.selectedIndex }, book.id))), _jsx(Text, { dimColor: true, children: `当前显示第 ${visibleBooks.start + 1} - ${visibleBooks.start + visibleBooks.items.length} 本 / 共 ${state.books.length} 本。` })] })) : null, state.message && state.books.length > 0 ? (_jsxs(_Fragment, { children: [_jsx(Newline, {}), _jsx(Text, { color: "yellow", children: state.message })] })) : null, _jsx(Newline, {}), _jsx(Text, { dimColor: true, children: "\u5DF2\u8FDE\u63A5\u8D26\u53F7" }), connected.length > 0 ? connected.map((provider) => (_jsx(Text, { children: `${provider.label}  |  账号 ${provider.boundAccounts}${provider.defaultAccount ? `  |  默认 ${provider.defaultAccount}` : ""}` }, provider.id))) : _jsx(Text, { dimColor: true, children: "\u4E66\u5E93\u9605\u8BFB\u4E0D\u4F9D\u8D56\u8D26\u53F7\uFF1B\u5982\u679C\u540E\u7EED\u9700\u8981\u540C\u6B65\u4E66\u67B6\uFF0C\u518D\u53BB\u201C\u8D26\u53F7\u201D\u91CC\u7ED1\u5B9A\u5E73\u53F0\u3002" })] }));
 }
 function AccountPanel({ state, providerLabel, accountProviderId, providers, }) {
     const liveConnectors = providers
@@ -1446,6 +1545,19 @@ function truncatePath(filePath, limit) {
     const fileName = basename(filePath);
     const head = Math.max(10, limit - fileName.length - 4);
     return `${filePath.slice(0, head)}.../${fileName}`;
+}
+function getVisibleWindow(items, selectedIndex, size) {
+    if (items.length <= size) {
+        return {
+            start: 0,
+            items,
+        };
+    }
+    const start = clamp(selectedIndex - Math.floor(size / 2), 0, Math.max(0, items.length - size));
+    return {
+        start,
+        items: items.slice(start, start + size),
+    };
 }
 function getReaderContentWidth(columns) {
     return clamp(Math.min(86, columns - 10), 32, 86);

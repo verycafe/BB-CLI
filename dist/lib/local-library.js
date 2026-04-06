@@ -1,18 +1,12 @@
 import { execFile } from "node:child_process";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, extname, join, resolve } from "node:path";
+import { basename, dirname, extname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
+export const LOCAL_LIBRARY_STORE_VERSION = 1;
 const MAX_SCAN_DEPTH = 4;
 const MAX_SCAN_RESULTS = 80;
-const SCAN_ROOTS = [
-    { label: "当前目录", path: resolve(process.cwd()) },
-    { label: "Books", path: join(homedir(), "Books") },
-    { label: "文稿", path: join(homedir(), "Documents") },
-    { label: "下载", path: join(homedir(), "Downloads") },
-    { label: "桌面", path: join(homedir(), "Desktop") },
-];
 const IGNORED_DIRECTORIES = new Set([
     ".git",
     "node_modules",
@@ -36,20 +30,20 @@ const BOOK_FORMATS = {
     ".odt": { id: "odt", label: "ODT" },
 };
 export async function listLocalBooks(limit = MAX_SCAN_RESULTS) {
-    const roots = await filterExistingRoots();
-    const books = [];
-    for (const root of roots) {
-        await walkDirectory(root.path, root.label, MAX_SCAN_DEPTH, limit, books);
-        if (books.length >= limit) {
+    const sources = await listLocalLibrarySources();
+    const books = new Map();
+    for (const source of sources) {
+        await scanSource(source, limit, books);
+        if (books.size >= limit) {
             break;
         }
     }
-    books.sort((left, right) => {
+    const sortedBooks = [...books.values()].sort((left, right) => {
         return new Date(right.modifiedAt).getTime() - new Date(left.modifiedAt).getTime();
     });
     return {
-        books: books.slice(0, limit),
-        roots: roots.map((root) => `${root.label} · ${root.path}`),
+        books: sortedBooks.slice(0, limit),
+        sources,
     };
 }
 export async function loadLocalBook(book) {
@@ -62,24 +56,128 @@ export async function loadLocalBook(book) {
         text,
     };
 }
-async function filterExistingRoots() {
-    const unique = new Map();
-    for (const root of SCAN_ROOTS) {
+export async function listLocalLibrarySources() {
+    const store = await loadLocalLibraryStore();
+    const existingSources = [];
+    for (const source of store.sources) {
         try {
-            const details = await stat(root.path);
-            if (!details.isDirectory()) {
+            const details = await stat(source.path);
+            const kind = details.isDirectory()
+                ? "directory"
+                : details.isFile()
+                    ? "file"
+                    : undefined;
+            if (!kind) {
                 continue;
             }
-            unique.set(root.path, root);
+            existingSources.push({
+                ...source,
+                kind,
+            });
         }
         catch {
             continue;
         }
     }
-    return [...unique.values()];
+    return existingSources;
+}
+export async function addLocalLibrarySource(inputPath) {
+    const normalizedInput = normalizeSourceInput(inputPath);
+    const resolvedPath = normalizedInput === "." ? resolve(process.cwd()) : resolve(normalizedInput);
+    const details = await stat(resolvedPath).catch(() => {
+        throw new Error(`没有找到这个路径：${resolvedPath}`);
+    });
+    const kind = details.isDirectory()
+        ? "directory"
+        : details.isFile()
+            ? "file"
+            : undefined;
+    if (!kind) {
+        throw new Error("只能添加文件夹或文件。");
+    }
+    if (kind === "file" && !getFormatFromPath(resolvedPath)) {
+        throw new Error("这个文件格式暂时不在书库支持范围内。请添加 EPUB、PDF、TXT、Markdown、HTML、DOCX、RTF 等常见书籍文件。");
+    }
+    const source = {
+        path: resolvedPath,
+        kind,
+        label: basename(resolvedPath) || resolvedPath,
+        addedAt: new Date().toISOString(),
+    };
+    const store = await loadLocalLibraryStore();
+    const nextSources = [
+        ...store.sources.filter((entry) => entry.path !== resolvedPath),
+        source,
+    ];
+    await saveLocalLibraryStore({
+        version: LOCAL_LIBRARY_STORE_VERSION,
+        sources: nextSources,
+    });
+    return source;
+}
+export async function removeLocalLibrarySource(sourcePath) {
+    const normalizedPath = resolve(sourcePath);
+    const store = await loadLocalLibraryStore();
+    const nextSources = store.sources.filter((entry) => entry.path !== normalizedPath);
+    if (nextSources.length === store.sources.length) {
+        return false;
+    }
+    await saveLocalLibraryStore({
+        version: LOCAL_LIBRARY_STORE_VERSION,
+        sources: nextSources,
+    });
+    return true;
+}
+export function buildLocalLibraryStorePath() {
+    const configRoot = process.env.XDG_CONFIG_HOME
+        ? join(process.env.XDG_CONFIG_HOME, "bbcli")
+        : join(homedir(), ".config", "bbcli");
+    return join(configRoot, "library.json");
+}
+async function loadLocalLibraryStore() {
+    const storePath = buildLocalLibraryStorePath();
+    try {
+        const raw = await readFile(storePath, "utf8");
+        const parsed = JSON.parse(raw);
+        if (parsed.version !== LOCAL_LIBRARY_STORE_VERSION || !Array.isArray(parsed.sources)) {
+            throw new Error(`书库来源配置格式不受支持：${storePath}`);
+        }
+        return {
+            version: LOCAL_LIBRARY_STORE_VERSION,
+            sources: parsed.sources
+                .filter((source) => typeof source.path === "string" && typeof source.label === "string")
+                .map((source) => ({
+                path: resolve(source.path),
+                kind: source.kind === "file" ? "file" : "directory",
+                label: source.label,
+                addedAt: source.addedAt ?? new Date().toISOString(),
+            })),
+        };
+    }
+    catch (error) {
+        if (error.code === "ENOENT") {
+            return {
+                version: LOCAL_LIBRARY_STORE_VERSION,
+                sources: [],
+            };
+        }
+        throw error;
+    }
+}
+async function saveLocalLibraryStore(store) {
+    const storePath = buildLocalLibraryStorePath();
+    await mkdir(dirname(storePath), { recursive: true, mode: 0o700 });
+    await writeFile(storePath, JSON.stringify(store, null, 2), { encoding: "utf8", mode: 0o600 });
+}
+async function scanSource(source, limit, books) {
+    if (source.kind === "file") {
+        await addBookFromFile(source.path, source.label, books);
+        return;
+    }
+    await walkDirectory(source.path, source.label, MAX_SCAN_DEPTH, limit, books);
 }
 async function walkDirectory(directoryPath, sourceLabel, remainingDepth, limit, books) {
-    if (remainingDepth < 0 || books.length >= limit) {
+    if (remainingDepth < 0 || books.size >= limit) {
         return;
     }
     let entries;
@@ -90,7 +188,7 @@ async function walkDirectory(directoryPath, sourceLabel, remainingDepth, limit, 
         return;
     }
     for (const entry of entries) {
-        if (books.length >= limit) {
+        if (books.size >= limit) {
             return;
         }
         const entryPath = join(directoryPath, entry.name);
@@ -108,27 +206,45 @@ async function walkDirectory(directoryPath, sourceLabel, remainingDepth, limit, 
         if (!format) {
             continue;
         }
-        try {
-            const details = await stat(entryPath);
-            books.push({
-                id: entryPath,
-                path: entryPath,
-                title: stripKnownExtension(entry.name),
-                fileName: entry.name,
-                format: format.id,
-                formatLabel: format.label,
-                sourceLabel,
-                sizeBytes: details.size,
-                modifiedAt: details.mtime.toISOString(),
-            });
-        }
-        catch {
-            continue;
-        }
+        await addBookFromFile(entryPath, sourceLabel, books);
+    }
+}
+async function addBookFromFile(filePath, sourceLabel, books) {
+    const format = getFormatFromPath(filePath);
+    if (!format || books.has(filePath)) {
+        return;
+    }
+    try {
+        const details = await stat(filePath);
+        books.set(filePath, {
+            id: filePath,
+            path: filePath,
+            title: stripKnownExtension(basename(filePath)),
+            fileName: basename(filePath),
+            format: format.id,
+            formatLabel: format.label,
+            sourceLabel,
+            sizeBytes: details.size,
+            modifiedAt: details.mtime.toISOString(),
+        });
+    }
+    catch {
+        return;
     }
 }
 function getFormatFromPath(filePath) {
     return BOOK_FORMATS[extname(filePath).toLowerCase()];
+}
+function normalizeSourceInput(inputPath) {
+    const trimmed = inputPath.trim();
+    if (!trimmed) {
+        throw new Error("请先输入文件或文件夹路径。");
+    }
+    const unwrapped = ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+        (trimmed.startsWith("'") && trimmed.endsWith("'")))
+        ? trimmed.slice(1, -1)
+        : trimmed;
+    return unwrapped.replace(/\\([\\ "'()[\]{}])/g, "$1");
 }
 function stripKnownExtension(fileName) {
     const extension = extname(fileName);
