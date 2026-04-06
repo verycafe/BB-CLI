@@ -12,21 +12,41 @@ const HOME_TABS = [
         id: "discover",
         label: "发现",
         summary: "推荐视频与内容入口。",
+        highlights: [
+            "Bilibili 首页推荐",
+            "后续接入 YouTube / Instagram",
+            "回车进入内容流",
+        ],
     },
     {
         id: "search",
         label: "搜索",
         summary: "搜索视频、链接与未来多平台内容。",
+        highlights: [
+            "关键词搜索",
+            "粘贴链接直接打开",
+            "后续接入 Google / 本地文件",
+        ],
     },
     {
         id: "library",
         label: "书库",
         summary: "阅读、本地文件与收藏内容。",
+        highlights: [
+            "微信读书",
+            "本地 EPUB / PDF",
+            "收藏与历史记录",
+        ],
     },
     {
         id: "accounts",
         label: "账号",
         summary: "绑定平台账号与身份。",
+        highlights: [
+            "Bilibili 账号",
+            "后续支持更多平台",
+            "管理默认身份",
+        ],
     },
 ];
 const EMPTY_ACCOUNT_FORM = {
@@ -386,6 +406,14 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
         handleAccountInput(inputKey, key);
     }
     function handleHomeMenuInput(inputKey, key) {
+        if (key.leftArrow || inputKey === "h") {
+            setHomeMenuIndex((current) => (current - 1 + HOME_TABS.length) % HOME_TABS.length);
+            return;
+        }
+        if (key.rightArrow || inputKey === "l") {
+            setHomeMenuIndex((current) => (current + 1) % HOME_TABS.length);
+            return;
+        }
         if (key.upArrow || inputKey === "k") {
             setHomeMenuIndex((current) => Math.max(0, current - 1));
             return;
@@ -738,10 +766,11 @@ function HomeScreen({ view, tab, menuIndex, providerLabel, inspectOnly, provider
     return (_jsxs(Box, { flexDirection: "column", children: [_jsx(BrandHeader, { activeTab: view === "menu" ? undefined : tab, providerLabel: activeLaneLabel, inspectOnly: view === "workspace" ? inspectOnly : false }), _jsx(Newline, {}), view === "menu" ? _jsx(MenuScreen, { selectedIndex: menuIndex }) : null, view === "workspace" ? _jsx(WorkspaceHeader, { tab: tab, providerLabel: activeLaneLabel }) : null, view === "workspace" ? _jsx(Newline, {}) : null, view === "workspace" && tab === "discover" ? _jsx(RecommendationPanel, { state: recommendations }) : null, view === "workspace" && tab === "search" ? _jsx(SearchPanel, { state: search }) : null, view === "workspace" && tab === "library" ? _jsx(LibraryPanel, { providers: providers }) : null, view === "workspace" && tab === "accounts" ? _jsx(AccountPanel, { state: accountForm, providerLabel: accountProviderLabel, accountProviderId: accountProviderId, providers: providers }) : null, _jsx(Newline, {}), !isInteractive ? _jsx(Text, { dimColor: true, children: "\u5F53\u524D\u7EC8\u7AEF\u4E0D\u652F\u6301\u4EA4\u4E92\u8F93\u5165\uFF0C\u8BF7\u5728\u6B63\u5E38\u7EC8\u7AEF\u91CC\u8FD0\u884C BBCLI\u3002" }) : null, isInteractive && view === "menu" ? _jsx(Text, { dimColor: true, children: `${activeMenu?.label ?? "菜单"}  ·  ↑↓ 选择  ·  Enter 进入  ·  直接输入搜索` }) : null, isInteractive && view === "workspace" && tab === "discover" ? _jsx(Text, { dimColor: true, children: "\u2191\u2193 \u9009\u62E9  \u00B7  Enter \u6253\u5F00  \u00B7  r \u5237\u65B0  \u00B7  b \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "search" ? _jsx(Text, { dimColor: true, children: "Enter \u641C\u7D22\u6216\u6253\u5F00  \u00B7  \u2191\u2193 \u9009\u62E9  \u00B7  Esc / b \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "library" ? _jsx(Text, { dimColor: true, children: "b \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "accounts" ? _jsx(Text, { dimColor: true, children: '[`] 切平台  ·  Tab 切字段  ·  Enter 绑定  ·  b 返回' }) : null] }));
 }
 function MenuScreen({ selectedIndex }) {
-    return (_jsx(Box, { flexDirection: "column", children: HOME_TABS.map((item, index) => {
-            const selected = index === selectedIndex;
-            return (_jsx(Text, { color: selected ? "yellow" : undefined, children: `${selected ? ">" : " "} ${item.label}  ·  ${item.summary}` }, item.id));
-        }) }));
+    const activeItem = HOME_TABS[selectedIndex];
+    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(Box, { children: HOME_TABS.map((item, index) => {
+                    const selected = index === selectedIndex;
+                    return (_jsxs(React.Fragment, { children: [_jsx(Text, { color: selected ? "yellow" : "gray", bold: selected, children: selected ? `[ ${item.label} ]` : item.label }), index < HOME_TABS.length - 1 ? _jsx(Text, { children: "  " }) : null] }, item.id));
+                }) }), _jsx(Newline, {}), _jsx(Text, { children: activeItem.summary }), _jsx(Newline, {}), activeItem.highlights.map((line, index) => (_jsx(Text, { dimColor: true, children: `${index === 0 ? ">" : " "} ${line}` }, `${activeItem.id}-${index}`)))] }));
 }
 function WorkspaceHeader({ tab, providerLabel }) {
     return (_jsxs(Box, { children: [_jsx(Text, { dimColor: true, children: "\u2190 \u83DC\u5355" }), _jsx(Text, { dimColor: true, children: "  /  " }), _jsx(Text, { bold: true, children: formatHomeTab(tab) }), _jsx(Text, { dimColor: true, children: `  /  ${providerLabel}` })] }));
@@ -783,7 +812,10 @@ function AccountPanel({ state, providerLabel, accountProviderId, providers, }) {
     }));
     const plannedConnectors = ACCOUNT_CONNECTORS.filter((connector) => !liveConnectors.some((provider) => provider.id === connector.id));
     const accountConnectors = [...liveConnectors, ...plannedConnectors];
-    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(CompactConnectorRow, { items: accountConnectors, activeId: accountProviderId }), _jsx(Newline, {}), _jsx(Text, { children: `绑定 ${providerLabel} 账号` }), _jsx(Text, { dimColor: true, children: state.existingAccounts.length > 0 ? `已有账号：${state.existingAccounts.join(", ")}${state.defaultAccount ? `  |  默认 ${state.defaultAccount}` : ""}` : "当前还没有已绑定账号。" }), _jsx(Newline, {}), _jsx(Text, { color: state.activeField === "name" ? "yellow" : undefined, children: `${state.activeField === "name" ? ">" : " "} 账号名：${state.name || "main"}` }), _jsx(Text, { dimColor: true, children: `  输入模式：${state.inputMode === "cookie" ? "粘贴 Cookie" : "Cookie 文件路径"}  |  设为默认：${state.makeDefault ? "是" : "否"}` }), _jsx(Text, { color: state.activeField === "value" ? "yellow" : undefined, children: `${state.activeField === "value" ? ">" : " "} ${state.inputMode === "cookie" ? "Cookie" : "Cookie 文件"}：${formatAccountValue(state.inputMode, state.value)}` }), _jsx(Text, { color: state.activeField === "note" ? "yellow" : undefined, children: `${state.activeField === "note" ? ">" : " "} 备注：${state.note || "可选"}` }), state.busy ? _jsx(Text, { dimColor: true, children: "\u5904\u7406\u4E2D..." }) : null, state.message ? _jsx(Text, { color: "yellow", children: state.message }) : null] }));
+    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(CompactConnectorRow, { items: accountConnectors, activeId: accountProviderId }), _jsx(Newline, {}), _jsx(Text, { color: "green", children: "\u8D26\u53F7\u8868\u5355" }), _jsx(Text, { dimColor: true, children: state.existingAccounts.length > 0 ? `已有账号：${state.existingAccounts.join(", ")}${state.defaultAccount ? `  ·  默认 ${state.defaultAccount}` : ""}` : "当前还没有已绑定账号。" }), _jsx(Newline, {}), _jsx(FormField, { label: "\u8D26\u53F7\u540D", value: state.name || "main", selected: state.activeField === "name" }), _jsx(Text, { dimColor: true, children: `模式 ${state.inputMode === "cookie" ? "粘贴 Cookie" : "Cookie 文件路径"}  ·  默认 ${state.makeDefault ? "是" : "否"}` }), _jsx(FormField, { label: state.inputMode === "cookie" ? "Cookie" : "Cookie 文件", value: formatAccountValue(state.inputMode, state.value), selected: state.activeField === "value" }), _jsx(FormField, { label: "\u5907\u6CE8", value: state.note || "可选", selected: state.activeField === "note" }), state.busy ? _jsx(Text, { dimColor: true, children: "\u5904\u7406\u4E2D..." }) : null, state.message ? _jsx(Text, { color: "yellow", children: state.message }) : null] }));
+}
+function FormField({ label, value, selected, }) {
+    return _jsx(Text, { color: selected ? "yellow" : undefined, children: `${selected ? ">" : " "} ${label}  ${value}` });
 }
 function CompactConnectorRow({ items, activeId, }) {
     return (_jsx(Box, { children: items.map((item, index) => {

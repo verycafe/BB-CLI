@@ -6,13 +6,13 @@ export type ParsedCookie = {
 export function parseCookieInput(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) {
-    throw new Error("Cookie input was empty.");
+    throw new Error("Cookie 输入为空。");
   }
 
   if (looksLikeNetscapeCookieJar(trimmed)) {
     const cookies = parseNetscapeCookieJar(trimmed);
     if (cookies.length === 0) {
-      throw new Error("No usable cookies were found in the cookie jar.");
+      throw new Error("Cookie 文件里没有可用的 Cookie。");
     }
 
     return buildCookieHeader(cookies);

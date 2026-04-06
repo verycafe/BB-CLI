@@ -100,26 +100,47 @@ const HOME_TABS: Array<{
   id: HomeTab;
   label: string;
   summary: string;
+  highlights: string[];
 }> = [
   {
     id: "discover",
     label: "发现",
     summary: "推荐视频与内容入口。",
+    highlights: [
+      "Bilibili 首页推荐",
+      "后续接入 YouTube / Instagram",
+      "回车进入内容流",
+    ],
   },
   {
     id: "search",
     label: "搜索",
     summary: "搜索视频、链接与未来多平台内容。",
+    highlights: [
+      "关键词搜索",
+      "粘贴链接直接打开",
+      "后续接入 Google / 本地文件",
+    ],
   },
   {
     id: "library",
     label: "书库",
     summary: "阅读、本地文件与收藏内容。",
+    highlights: [
+      "微信读书",
+      "本地 EPUB / PDF",
+      "收藏与历史记录",
+    ],
   },
   {
     id: "accounts",
     label: "账号",
     summary: "绑定平台账号与身份。",
+    highlights: [
+      "Bilibili 账号",
+      "后续支持更多平台",
+      "管理默认身份",
+    ],
   },
 ];
 
@@ -537,6 +558,16 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
   }
 
   function handleHomeMenuInput(inputKey: string, key: Key): void {
+    if (key.leftArrow || inputKey === "h") {
+      setHomeMenuIndex((current) => (current - 1 + HOME_TABS.length) % HOME_TABS.length);
+      return;
+    }
+
+    if (key.rightArrow || inputKey === "l") {
+      setHomeMenuIndex((current) => (current + 1) % HOME_TABS.length);
+      return;
+    }
+
     if (key.upArrow || inputKey === "k") {
       setHomeMenuIndex((current) => Math.max(0, current - 1));
       return;
@@ -1034,16 +1065,27 @@ function HomeScreen({
 }
 
 function MenuScreen({selectedIndex}: {selectedIndex: number}) {
+  const activeItem = HOME_TABS[selectedIndex]!;
+
   return (
     <Box flexDirection="column">
-      {HOME_TABS.map((item, index) => {
-        const selected = index === selectedIndex;
-        return (
-          <Text key={item.id} color={selected ? "yellow" : undefined}>
-            {`${selected ? ">" : " "} ${item.label}  ·  ${item.summary}`}
-          </Text>
-        );
-      })}
+      <Box>
+        {HOME_TABS.map((item, index) => {
+          const selected = index === selectedIndex;
+          return (
+            <React.Fragment key={item.id}>
+              <Text color={selected ? "yellow" : "gray"} bold={selected}>{selected ? `[ ${item.label} ]` : item.label}</Text>
+              {index < HOME_TABS.length - 1 ? <Text>  </Text> : null}
+            </React.Fragment>
+          );
+        })}
+      </Box>
+      <Newline />
+      <Text>{activeItem.summary}</Text>
+      <Newline />
+      {activeItem.highlights.map((line, index) => (
+        <Text key={`${activeItem.id}-${index}`} dimColor>{`${index === 0 ? ">" : " "} ${line}`}</Text>
+      ))}
     </Box>
   );
 }
@@ -1183,17 +1225,29 @@ function AccountPanel({
     <Box flexDirection="column">
       <CompactConnectorRow items={accountConnectors} activeId={accountProviderId} />
       <Newline />
-      <Text>{`绑定 ${providerLabel} 账号`}</Text>
-      <Text dimColor>{state.existingAccounts.length > 0 ? `已有账号：${state.existingAccounts.join(", ")}${state.defaultAccount ? `  |  默认 ${state.defaultAccount}` : ""}` : "当前还没有已绑定账号。"}</Text>
+      <Text color="green">账号表单</Text>
+      <Text dimColor>{state.existingAccounts.length > 0 ? `已有账号：${state.existingAccounts.join(", ")}${state.defaultAccount ? `  ·  默认 ${state.defaultAccount}` : ""}` : "当前还没有已绑定账号。"}</Text>
       <Newline />
-      <Text color={state.activeField === "name" ? "yellow" : undefined}>{`${state.activeField === "name" ? ">" : " "} 账号名：${state.name || "main"}`}</Text>
-      <Text dimColor>{`  输入模式：${state.inputMode === "cookie" ? "粘贴 Cookie" : "Cookie 文件路径"}  |  设为默认：${state.makeDefault ? "是" : "否"}`}</Text>
-      <Text color={state.activeField === "value" ? "yellow" : undefined}>{`${state.activeField === "value" ? ">" : " "} ${state.inputMode === "cookie" ? "Cookie" : "Cookie 文件"}：${formatAccountValue(state.inputMode, state.value)}`}</Text>
-      <Text color={state.activeField === "note" ? "yellow" : undefined}>{`${state.activeField === "note" ? ">" : " "} 备注：${state.note || "可选"}`}</Text>
+      <FormField label="账号名" value={state.name || "main"} selected={state.activeField === "name"} />
+      <Text dimColor>{`模式 ${state.inputMode === "cookie" ? "粘贴 Cookie" : "Cookie 文件路径"}  ·  默认 ${state.makeDefault ? "是" : "否"}`}</Text>
+      <FormField label={state.inputMode === "cookie" ? "Cookie" : "Cookie 文件"} value={formatAccountValue(state.inputMode, state.value)} selected={state.activeField === "value"} />
+      <FormField label="备注" value={state.note || "可选"} selected={state.activeField === "note"} />
       {state.busy ? <Text dimColor>处理中...</Text> : null}
       {state.message ? <Text color="yellow">{state.message}</Text> : null}
     </Box>
   );
+}
+
+function FormField({
+  label,
+  value,
+  selected,
+}: {
+  label: string;
+  value: string;
+  selected: boolean;
+}) {
+  return <Text color={selected ? "yellow" : undefined}>{`${selected ? ">" : " "} ${label}  ${value}`}</Text>;
 }
 
 function CompactConnectorRow({
