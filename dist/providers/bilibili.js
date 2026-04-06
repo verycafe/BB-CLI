@@ -3,18 +3,18 @@ import { parseCookieHeader } from "../lib/cookies.js";
 export const bilibiliProvider = {
     descriptor: {
         id: "bilibili",
-        label: "Bilibili",
+        label: "哔哩哔哩",
         supportsMedia: true,
         supportsAccounts: true,
-        authHint: "Bind browser session cookies so BBCLI can send authenticated requests when needed.",
-        detectionHint: "Recognizes BV ids and bilibili.com video URLs.",
+        authHint: "绑定浏览器登录态 Cookie，这样 BBCLI 在需要时就能发起带身份的请求。",
+        detectionHint: "支持识别 BV 号和 bilibili.com 视频链接。",
         accountFields: [
             {
                 key: "Cookie",
                 label: "Cookie",
                 required: true,
                 secret: true,
-                description: "Logged-in browser cookies such as SESSDATA and bili_jct, sent as the Cookie request header.",
+                description: "浏览器登录后的 Cookie，例如 SESSDATA 和 bili_jct，作为 Cookie 请求头发送。",
             },
         ],
         examples: [
@@ -49,7 +49,7 @@ export const bilibiliProvider = {
     },
     validateAccountHeaders(headers) {
         if (!headers.Cookie) {
-            throw new Error("Bilibili account bindings require a Cookie header.");
+            throw new Error("哔哩哔哩账号绑定必须提供 Cookie 请求头。");
         }
     },
     inspectAccountHeaders(headers) {
@@ -58,7 +58,7 @@ export const bilibiliProvider = {
         if (!cookieHeader) {
             diagnostics.push({
                 level: "error",
-                message: "Missing Cookie header.",
+                message: "缺少 Cookie 请求头。",
             });
             return diagnostics;
         }
@@ -69,42 +69,42 @@ export const bilibiliProvider = {
         if (sessdata) {
             diagnostics.push({
                 level: "ok",
-                message: "SESSDATA is present.",
+                message: "已检测到 SESSDATA。",
             });
         }
         else {
             diagnostics.push({
                 level: "error",
-                message: "SESSDATA is missing. Logged-in requests usually will not work without it.",
+                message: "缺少 SESSDATA。没有它，登录态请求通常无法正常工作。",
             });
         }
         if (biliJct) {
             diagnostics.push({
                 level: "ok",
-                message: "bili_jct is present.",
+                message: "已检测到 bili_jct。",
             });
         }
         else {
             diagnostics.push({
                 level: "warning",
-                message: "bili_jct is missing. Some state-changing requests may fail CSRF validation.",
+                message: "缺少 bili_jct。部分会修改状态的请求可能无法通过 CSRF 校验。",
             });
         }
         if (dedeUserId) {
             diagnostics.push({
                 level: "ok",
-                message: "DedeUserID is present.",
+                message: "已检测到 DedeUserID。",
             });
         }
         else {
             diagnostics.push({
                 level: "warning",
-                message: "DedeUserID is missing. Some account-specific requests may have less context.",
+                message: "缺少 DedeUserID。部分账号相关请求可能缺少上下文。",
             });
         }
         diagnostics.push({
             level: "ok",
-            message: `Cookie keys parsed: ${Array.from(cookies.keys()).sort().join(", ") || "none"}`,
+            message: `已解析到的 Cookie 键：${Array.from(cookies.keys()).sort().join(", ") || "无"}`,
         });
         return diagnostics;
     },
@@ -123,36 +123,36 @@ export const bilibiliProvider = {
                 diagnostics: [
                     {
                         level: "error",
-                        message: `Remote probe failed with HTTP ${response.status} ${response.statusText}.`,
+                        message: `远程探针失败：HTTP ${response.status} ${response.statusText}。`,
                     },
                 ],
             };
         }
         const payload = (await response.json());
         const summaryLines = [
-            `API code: ${payload.code ?? "unknown"}`,
-            `API message: ${payload.message ?? "unknown"}`,
+            `接口返回码：${payload.code ?? "未知"}`,
+            `接口消息：${payload.message ?? "未知"}`,
         ];
         if (payload.data?.ip_region) {
-            summaryLines.push(`IP region: ${payload.data.ip_region}`);
+            summaryLines.push(`IP 地区：${payload.data.ip_region}`);
         }
         if (payload.code === 0 && payload.data?.isLogin) {
             const diagnostics = [
                 {
                     level: "ok",
-                    message: "Remote login probe says the account is logged in.",
+                    message: "远程探针确认当前账号已登录。",
                 },
             ];
             if (payload.data.uname) {
                 diagnostics.push({
                     level: "ok",
-                    message: `Remote user: ${payload.data.uname}${payload.data.mid ? ` (mid ${payload.data.mid})` : ""}.`,
+                    message: `远程账号：${payload.data.uname}${payload.data.mid ? `（mid ${payload.data.mid}）` : ""}。`,
                 });
             }
             if (payload.data.money !== undefined) {
                 diagnostics.push({
                     level: "ok",
-                    message: `B coin balance: ${payload.data.money}.`,
+                    message: `B 币余额：${payload.data.money}。`,
                 });
             }
             return { diagnostics, summaryLines };
@@ -161,7 +161,7 @@ export const bilibiliProvider = {
             diagnostics: [
                 {
                     level: "error",
-                    message: `Remote login probe says the account is not logged in${payload.message ? `: ${payload.message}` : "."}`,
+                    message: `远程探针显示当前账号未登录${payload.message ? `：${payload.message}` : "。"}`,
                 },
             ],
             summaryLines,

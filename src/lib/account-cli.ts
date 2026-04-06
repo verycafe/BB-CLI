@@ -51,13 +51,13 @@ export async function runAccountCommand(command: AccountCommand, input: string[]
     case "check":
       return runCheck(input, flags);
     default:
-      throw new Error(`Unsupported account command: ${command satisfies never}`);
+      throw new Error(`不支持的账号子命令：${command satisfies never}`);
   }
 }
 
 function printAccountUsage(providerId?: string): void {
-  console.log("Account commands:");
-  console.log("  bbcli account bind <provider> --name <name> [--cookie ... | --cookie-file path | --token ... | --header 'K: V']");
+  console.log("账号命令：");
+  console.log("  bbcli account bind <provider> --name <name> [--cookie ... | --cookie-file 路径 | --token ... | --header 'K: V']");
   console.log("  bbcli account list [provider]");
   console.log("  bbcli account show <provider> <name>");
   console.log("  bbcli account use <provider> <name>");
@@ -67,19 +67,19 @@ function printAccountUsage(providerId?: string): void {
   if (providerId) {
     const provider = getBuiltInProvider(providerId);
     if (provider) {
-      console.log(`Provider: ${provider.descriptor.label} (${provider.descriptor.id})`);
-      console.log(`Auth: ${provider.descriptor.authHint}`);
+      console.log(`平台：${provider.descriptor.label} (${provider.descriptor.id})`);
+      console.log(`认证说明：${provider.descriptor.authHint}`);
       if (provider.descriptor.accountFields.length > 0) {
-        console.log("Expected account fields:");
+        console.log("账号字段：");
         for (const field of provider.descriptor.accountFields) {
-          console.log(`  - ${field.key}${field.required ? " (required)" : ""}`);
+          console.log(`  - ${field.key}${field.required ? "（必填）" : ""}`);
           console.log(`    ${field.description}`);
         }
       }
       console.log("");
     }
   }
-  console.log(`Store path: ${buildAccountStorePath()}`);
+  console.log(`账号存储：${buildAccountStorePath()}`);
 }
 
 async function runBind(input: string[], flags: AccountCliFlags): Promise<number> {
@@ -87,7 +87,7 @@ async function runBind(input: string[], flags: AccountCliFlags): Promise<number>
   const name = flags.name;
   if (!provider || !name) {
     printAccountUsage(provider);
-    throw new Error("`account bind` requires <provider> and --name.");
+    throw new Error("`account bind` 需要提供 <provider> 和 --name。");
   }
 
   const headers = Object.fromEntries(flags.header.map(parseHeader));
@@ -122,13 +122,13 @@ async function runBind(input: string[], flags: AccountCliFlags): Promise<number>
     makeDefault: flags.default,
   });
 
-  console.log(`Bound account ${result.account.provider}:${result.account.name}`);
-  console.log(`Headers: ${Object.keys(result.account.headers).join(", ")}`);
+  console.log(`已绑定账号：${result.account.provider}:${result.account.name}`);
+  console.log(`请求头：${Object.keys(result.account.headers).join(", ")}`);
   if (headers.Cookie) {
-    console.log(`Cookie keys: ${Array.from(parseCookieInput(headers.Cookie).split(";")).length}`);
+    console.log(`Cookie 项数：${Array.from(parseCookieInput(headers.Cookie).split(";")).length}`);
   }
   if (result.isDefault) {
-    console.log("Default: yes");
+    console.log("默认账号：是");
   }
 
   return 0;
@@ -138,17 +138,17 @@ async function runList(input: string[]): Promise<number> {
   const provider = input[0];
   const accounts = await listAccounts(provider);
   if (accounts.length === 0) {
-    console.log("No accounts bound yet.");
-    console.log(`Store path: ${buildAccountStorePath()}`);
+    console.log("还没有绑定任何账号。");
+    console.log(`账号存储：${buildAccountStorePath()}`);
     return 0;
   }
 
   for (const account of accounts) {
     console.log(`${account.isDefault ? "*" : " "} ${account.provider}:${account.name}`);
-    console.log(`  headers: ${account.headerNames.join(", ") || "none"}`);
-    console.log(`  updated: ${account.updatedAt}`);
+    console.log(`  请求头：${account.headerNames.join(", ") || "无"}`);
+    console.log(`  更新于：${account.updatedAt}`);
     if (account.note) {
-      console.log(`  note: ${account.note}`);
+      console.log(`  备注：${account.note}`);
     }
   }
 
@@ -160,12 +160,12 @@ async function runShow(input: string[]): Promise<number> {
   const name = input[1];
   if (!provider || !name) {
     printAccountUsage(provider);
-    throw new Error("`account show` requires <provider> <name>.");
+    throw new Error("`account show` 需要提供 <provider> <name>。");
   }
 
   const result = await getAccount(provider, name);
   if (!result) {
-    throw new Error(`No account found for ${provider}:${name}.`);
+    throw new Error(`没有找到账号：${provider}:${name}。`);
   }
 
   const account = redactAccount(result.account);
@@ -181,11 +181,11 @@ async function runUse(input: string[], flags: AccountCliFlags): Promise<number> 
   const name = input[1] ?? flags.name;
   if (!provider || !name) {
     printAccountUsage(provider);
-    throw new Error("`account use` requires <provider> <name>.");
+    throw new Error("`account use` 需要提供 <provider> <name>。");
   }
 
   await setDefaultAccount(provider, name);
-  console.log(`Default account for ${provider} is now ${name}.`);
+  console.log(`已将 ${provider} 的默认账号切换为 ${name}。`);
   return 0;
 }
 
@@ -194,15 +194,15 @@ async function runRemove(input: string[], flags: AccountCliFlags): Promise<numbe
   const name = input[1] ?? flags.name;
   if (!provider || !name) {
     printAccountUsage(provider);
-    throw new Error("`account remove` requires <provider> <name>.");
+    throw new Error("`account remove` 需要提供 <provider> <name>。");
   }
 
   const removed = await removeAccount(provider, name);
   if (!removed) {
-    throw new Error(`No account found for ${provider}:${name}.`);
+    throw new Error(`没有找到账号：${provider}:${name}。`);
   }
 
-  console.log(`Removed ${provider}:${name}.`);
+  console.log(`已删除账号：${provider}:${name}。`);
   return 0;
 }
 
@@ -211,22 +211,22 @@ async function runCheck(input: string[], flags: AccountCliFlags): Promise<number
   const name = input[1] ?? flags.name;
   if (!provider || !name) {
     printAccountUsage(provider);
-    throw new Error("`account check` requires <provider> <name>.");
+    throw new Error("`account check` 需要提供 <provider> <name>。");
   }
 
   const result = await getAccount(provider, name);
   if (!result) {
-    throw new Error(`No account found for ${provider}:${name}.`);
+    throw new Error(`没有找到账号：${provider}:${name}。`);
   }
 
   const diagnostics = inspectProviderAccountHeaders(provider, result.account.headers);
-  console.log(`Account check: ${result.account.provider}:${result.account.name}`);
-  console.log(`Default: ${result.isDefault ? "yes" : "no"}`);
-  console.log(`Headers: ${Object.keys(result.account.headers).join(", ") || "none"}`);
-  console.log("Local diagnostics:");
+  console.log(`账号检查：${result.account.provider}:${result.account.name}`);
+  console.log(`默认账号：${result.isDefault ? "是" : "否"}`);
+  console.log(`请求头：${Object.keys(result.account.headers).join(", ") || "无"}`);
+  console.log("本地诊断：");
 
   if (diagnostics.length === 0) {
-    console.log("No provider-specific diagnostics are available for this account.");
+    console.log("当前平台没有提供额外的本地诊断。");
   } else {
     let hasError = false;
     for (const diagnostic of diagnostics) {
@@ -234,7 +234,7 @@ async function runCheck(input: string[], flags: AccountCliFlags): Promise<number
         hasError = true;
       }
 
-      const prefix = diagnostic.level === "ok" ? "OK" : diagnostic.level === "warning" ? "WARN" : "ERR";
+      const prefix = formatDiagnosticPrefix(diagnostic.level);
       console.log(`${prefix}: ${diagnostic.message}`);
     }
 
@@ -254,14 +254,14 @@ async function runCheck(input: string[], flags: AccountCliFlags): Promise<number
   });
 
   if (!remote) {
-    console.log("Remote probe:");
-    console.log("WARN: No remote provider probe is available for this provider.");
+    console.log("远程探针：");
+    console.log("提醒：当前平台暂时没有远程登录探针。");
     return diagnostics.some((item) => item.level === "error") ? 1 : 0;
   }
 
-  console.log("Remote probe:");
+  console.log("远程探针：");
   for (const line of remote.summaryLines ?? []) {
-    console.log(`INFO: ${line}`);
+    console.log(`信息：${line}`);
   }
 
   let hasError = diagnostics.some((item) => item.level === "error");
@@ -270,7 +270,7 @@ async function runCheck(input: string[], flags: AccountCliFlags): Promise<number
       hasError = true;
     }
 
-    const prefix = diagnostic.level === "ok" ? "OK" : diagnostic.level === "warning" ? "WARN" : "ERR";
+    const prefix = formatDiagnosticPrefix(diagnostic.level);
     console.log(`${prefix}: ${diagnostic.message}`);
   }
 
@@ -280,13 +280,13 @@ async function runCheck(input: string[], flags: AccountCliFlags): Promise<number
 function parseHeader(raw: string): [string, string] {
   const separatorIndex = raw.indexOf(":");
   if (separatorIndex === -1) {
-    throw new Error(`Header must look like "Key: Value", got "${raw}".`);
+    throw new Error(`请求头格式必须是 "Key: Value"，当前收到的是 "${raw}"。`);
   }
 
   const key = raw.slice(0, separatorIndex).trim();
   const value = raw.slice(separatorIndex + 1).trim();
   if (!key || !value) {
-    throw new Error(`Header must look like "Key: Value", got "${raw}".`);
+    throw new Error(`请求头格式必须是 "Key: Value"，当前收到的是 "${raw}"。`);
   }
 
   return [key, value];
@@ -302,7 +302,7 @@ async function readStdinSecret(): Promise<string> {
     stdin.on("end", () => {
       const trimmed = value.trim();
       if (!trimmed) {
-        reject(new Error("Expected secret content on stdin, but stdin was empty."));
+        reject(new Error("标准输入里没有读到任何密钥内容。"));
         return;
       }
 
@@ -310,6 +310,18 @@ async function readStdinSecret(): Promise<string> {
     });
     stdin.on("error", reject);
   });
+}
+
+function formatDiagnosticPrefix(level: "ok" | "warning" | "error"): string {
+  if (level === "ok") {
+    return "通过";
+  }
+
+  if (level === "warning") {
+    return "提醒";
+  }
+
+  return "错误";
 }
 
 function printJson(value: StoredAccount & {isDefault: boolean}): void {

@@ -7,16 +7,16 @@ INSTALL_REF="${BBCLI_INSTALL_REF:-latest}"
 INSTALL_PREFIX="${BBCLI_PREFIX:-}"
 
 log() {
-  printf 'bbcli install: %s\n' "$*" >&2
+  printf 'bbcli 安装：%s\n' "$*" >&2
 }
 
 fail() {
-  printf 'bbcli install: %s\n' "$*" >&2
+  printf 'bbcli 安装：%s\n' "$*" >&2
   exit 1
 }
 
 require_cmd() {
-  command -v "$1" >/dev/null 2>&1 || fail "missing required command: $1"
+  command -v "$1" >/dev/null 2>&1 || fail "缺少必需命令：$1"
 }
 
 read_json_field() {
@@ -87,9 +87,9 @@ resolve_release_source() {
   )"
 
   if [ -n "$tag_name" ]; then
-    log "using GitHub Release asset from ${tag_name}"
+    log "使用 GitHub Release 资产：${tag_name}"
   else
-    log "using GitHub Release asset"
+    log "使用 GitHub Release 资产"
   fi
 
   printf '%s' "$asset_url"
@@ -113,7 +113,7 @@ npm_install_global() {
 
   cmd+=("$source")
 
-  log "installing ${source}"
+  log "正在安装：${source}"
   "${cmd[@]}"
 }
 
@@ -124,19 +124,19 @@ print_success() {
     bbcli_command="$INSTALL_PREFIX/bin/bbcli"
   fi
 
-  log "install completed"
-  printf '\nTry:\n  %s providers\n' "$bbcli_command"
+  log "安装完成"
+  printf '\n现在可以运行：\n  %s\n' "$bbcli_command"
 
   if ! command -v mpv >/dev/null 2>&1; then
-    printf '\nTerminal playback needs mpv, and it is not installed yet.\n' >&2
+    printf '\n终端内播放需要 mpv，但当前机器还没有安装。\n' >&2
 
     if [ "$(uname -s)" = "Darwin" ] && command -v brew >/dev/null 2>&1; then
-      printf 'Install it with:\n  brew install mpv ffmpeg\n' >&2
+      printf '可以这样安装：\n  brew install mpv ffmpeg\n' >&2
     else
-      printf 'Install mpv with your system package manager before trying to play video.\n' >&2
+      printf '请先用系统包管理器安装 mpv，再尝试播放视频。\n' >&2
     fi
 
-    printf 'BBCLI will stay in terminal mode by default and will not auto-open a separate ffplay window.\n' >&2
+    printf 'BBCLI 默认会停留在终端模式，不会自动弹出单独的 ffplay 窗口。\n' >&2
   fi
 }
 
@@ -153,18 +153,18 @@ main() {
         :
       else
         install_source="$(resolve_archive_source)"
-        log "no installable GitHub Release package found; falling back to ${install_source}"
+        log "没有找到可安装的 GitHub Release 包，回退到 ${install_source}"
       fi
       ;;
     release)
-      install_source="$(resolve_release_source)" || fail "no installable GitHub Release package found for ref '${INSTALL_REF}'"
+      install_source="$(resolve_release_source)" || fail "没有找到 ref='${INSTALL_REF}' 对应的可安装 GitHub Release 包"
       ;;
     archive)
       install_source="$(resolve_archive_source)"
-      log "using GitHub archive source ${install_source}"
+      log "使用 GitHub 压缩包源：${install_source}"
       ;;
     *)
-      fail "unsupported BBCLI_INSTALL_MODE '${INSTALL_MODE}' (expected auto, release, or archive)"
+      fail "不支持的 BBCLI_INSTALL_MODE：'${INSTALL_MODE}'，可选值为 auto、release、archive"
       ;;
   esac
 

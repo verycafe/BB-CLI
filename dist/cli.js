@@ -166,12 +166,12 @@ function printNonInteractiveHelp() {
     console.log("BBCLI");
     console.log("请在可交互终端中运行 `bbcli`，进入发现 / 搜索 / 书库 / 账号 启动器。");
     console.log("");
-    console.log("直接播放：");
+    console.log("直接打开：");
     console.log("  bbcli BV17PYqerEtA");
     console.log("  bbcli https://www.bilibili.com/video/BV17PYqerEtA/");
     console.log("");
     console.log("常用命令：");
-    console.log("  bbcli providers");
+    console.log("  bbcli");
     console.log("  bbcli account list");
 }
 async function printNonInteractiveSession(target, selectedAccountName, inspectOnly) {

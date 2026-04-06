@@ -30,66 +30,66 @@ export async function printProvidersSummary(providerId?: string): Promise<void> 
   if (providerId) {
     const provider = getBuiltInProvider(providerId);
     if (!provider) {
-      throw new Error(`Unknown built-in provider "${providerId}".`);
+      throw new Error(`未知的内置平台：${providerId}。`);
     }
 
     const providerAccounts = await listAccounts(provider.descriptor.id);
     const defaultAccount = providerAccounts.find((account) => account.isDefault);
 
     console.log(`${provider.descriptor.label} (${provider.descriptor.id})`);
-    console.log(`media: ${provider.descriptor.supportsMedia ? "yes" : "no"}`);
-    console.log(`account binding: ${provider.descriptor.supportsAccounts ? "yes" : "no"}`);
-    console.log(`detection: ${provider.descriptor.detectionHint}`);
-    console.log(`auth: ${provider.descriptor.authHint}`);
-    console.log(`bound accounts: ${providerAccounts.length}`);
+    console.log(`支持媒体：${provider.descriptor.supportsMedia ? "是" : "否"}`);
+    console.log(`支持账号绑定：${provider.descriptor.supportsAccounts ? "是" : "否"}`);
+    console.log(`识别规则：${provider.descriptor.detectionHint}`);
+    console.log(`认证说明：${provider.descriptor.authHint}`);
+    console.log(`已绑定账号：${providerAccounts.length}`);
     if (defaultAccount) {
-      console.log(`default account: ${defaultAccount.name}`);
+      console.log(`默认账号：${defaultAccount.name}`);
     }
 
     if (provider.descriptor.accountFields.length > 0) {
-      console.log("account fields:");
+      console.log("账号字段：");
       for (const field of provider.descriptor.accountFields) {
-        console.log(`- ${field.key}${field.required ? " (required)" : ""}${field.secret ? " [secret]" : ""}`);
+        console.log(`- ${field.key}${field.required ? "（必填）" : ""}${field.secret ? " [敏感]" : ""}`);
         console.log(`  ${field.description}`);
       }
     }
 
     if (provider.descriptor.examples.length > 0) {
-      console.log("examples:");
+      console.log("示例：");
       for (const example of provider.descriptor.examples) {
         console.log(`- ${example}`);
       }
     }
 
-    console.log(`account store: ${buildAccountStorePath()}`);
+    console.log(`账号存储：${buildAccountStorePath()}`);
     return;
   }
 
-  console.log("Known BBCLI providers:");
+  console.log("BBCLI 当前内置平台：");
   for (const provider of BUILT_IN_PROVIDERS) {
     const providerAccounts = await listAccounts(provider.descriptor.id);
     const defaultAccount = providerAccounts.find((account) => account.isDefault);
     console.log(`- ${provider.descriptor.id} (${provider.descriptor.label})`);
-    console.log(`  media: ${provider.descriptor.supportsMedia ? "yes" : "no"}`);
-    console.log(`  account binding: ${provider.descriptor.supportsAccounts ? "yes" : "no"}`);
-    console.log(`  detection: ${provider.descriptor.detectionHint}`);
-    console.log(`  auth: ${provider.descriptor.authHint}`);
-    console.log(`  bound accounts: ${providerAccounts.length}`);
+    console.log(`  支持媒体：${provider.descriptor.supportsMedia ? "是" : "否"}`);
+    console.log(`  支持账号绑定：${provider.descriptor.supportsAccounts ? "是" : "否"}`);
+    console.log(`  识别规则：${provider.descriptor.detectionHint}`);
+    console.log(`  认证说明：${provider.descriptor.authHint}`);
+    console.log(`  已绑定账号：${providerAccounts.length}`);
     if (defaultAccount) {
-      console.log(`  default account: ${defaultAccount.name}`);
+      console.log(`  默认账号：${defaultAccount.name}`);
     }
   }
 
   console.log("");
-  console.log("Use `bbcli providers <id>` to inspect a provider's account schema and examples.");
-  console.log("Custom provider ids are also allowed in the account store for future integrations.");
-  console.log(`Account store: ${buildAccountStorePath()}`);
+  console.log("用 `bbcli providers <id>` 可以查看某个平台的账号字段和示例。");
+  console.log("账号存储也允许未来接入自定义平台 ID。");
+  console.log(`账号存储：${buildAccountStorePath()}`);
 }
 
 export function resolveMediaTarget(input: string, overrideProvider?: string): MediaTarget {
   const explicitProvider = overrideProvider ? getBuiltInProvider(overrideProvider) : undefined;
   if (overrideProvider && !explicitProvider) {
-    throw new Error(`Provider "${overrideProvider}" is not a supported media provider yet.`);
+    throw new Error(`平台 "${overrideProvider}" 还不是当前支持的媒体平台。`);
   }
 
   if (explicitProvider) {
@@ -103,7 +103,7 @@ export function resolveMediaTarget(input: string, overrideProvider?: string): Me
 
   const detectedProvider = BUILT_IN_PROVIDERS.find((provider) => provider.detect(input));
   if (!detectedProvider) {
-    throw new Error("Could not detect a supported media provider from the input. Try `bbcli providers`.");
+    throw new Error("无法从输入里识别出支持的平台。可以先运行 `bbcli providers` 查看。");
   }
 
   return {
@@ -117,7 +117,7 @@ export function resolveMediaTarget(input: string, overrideProvider?: string): Me
 export async function loadMediaSession(target: MediaTarget, account?: RequestAccount): Promise<VideoSession> {
   const provider = getBuiltInProvider(target.providerId);
   if (!provider) {
-    throw new Error(`No media loader is implemented for provider "${target.providerId}".`);
+    throw new Error(`平台 "${target.providerId}" 还没有实现媒体加载能力。`);
   }
 
   return provider.loadSession(target.normalizedInput, account);
@@ -126,17 +126,17 @@ export async function loadMediaSession(target: MediaTarget, account?: RequestAcc
 export async function searchMedia(query: string, providerId?: string, account?: RequestAccount): Promise<MediaSearchResult[]> {
   const trimmed = query.trim();
   if (!trimmed) {
-    throw new Error("Please enter a search query.");
+    throw new Error("请输入搜索关键词。");
   }
 
   if (providerId) {
     const provider = getBuiltInProvider(providerId);
     if (!provider) {
-      throw new Error(`Unknown built-in provider "${providerId}".`);
+      throw new Error(`未知的内置平台：${providerId}。`);
     }
 
     if (!provider.search) {
-      throw new Error(`Provider "${providerId}" does not support media search yet.`);
+      throw new Error(`平台 "${providerId}" 暂时还不支持搜索。`);
     }
 
     return provider.search(trimmed, account);
@@ -144,7 +144,7 @@ export async function searchMedia(query: string, providerId?: string, account?: 
 
   const searchableProvider = BUILT_IN_PROVIDERS.find((provider) => provider.search);
   if (!searchableProvider) {
-    throw new Error("No searchable provider is available yet.");
+    throw new Error("当前还没有可搜索的平台。");
   }
 
   return searchableProvider.search!(trimmed, account);
@@ -154,11 +154,11 @@ export async function listRecommendedMedia(providerId?: string, account?: Reques
   if (providerId) {
     const provider = getBuiltInProvider(providerId);
     if (!provider) {
-      throw new Error(`Unknown built-in provider "${providerId}".`);
+      throw new Error(`未知的内置平台：${providerId}。`);
     }
 
     if (!provider.getRecommendations) {
-      throw new Error(`Provider "${providerId}" does not expose recommendations yet.`);
+      throw new Error(`平台 "${providerId}" 暂时还没有推荐流。`);
     }
 
     return provider.getRecommendations(account);
@@ -166,7 +166,7 @@ export async function listRecommendedMedia(providerId?: string, account?: Reques
 
   const provider = BUILT_IN_PROVIDERS.find((entry) => entry.getRecommendations);
   if (!provider) {
-    throw new Error("No provider exposes recommendations yet.");
+    throw new Error("当前还没有任何平台提供推荐流。");
   }
 
   return provider.getRecommendations!(account);

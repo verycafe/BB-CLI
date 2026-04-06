@@ -4,7 +4,7 @@ const SUPPORTED_CODECID_ORDER = [7, 12, 13];
 export function normalizeVideoInput(input) {
     const trimmed = input.trim();
     if (!trimmed) {
-        throw new Error("Please provide a Bilibili video URL or a BV id.");
+        throw new Error("请输入哔哩哔哩视频链接或 BV 号。");
     }
     if (/^BV[0-9A-Za-z]+$/i.test(trimmed)) {
         return `${BILIBILI_SOURCE_ORIGIN}/video/BV${trimmed.slice(2)}/`;
@@ -12,13 +12,13 @@ export function normalizeVideoInput(input) {
     try {
         const parsed = new URL(trimmed);
         if (!parsed.hostname.endsWith("bilibili.com")) {
-            throw new Error("Only bilibili.com video URLs are supported right now.");
+            throw new Error("当前只支持 bilibili.com 的视频链接。");
         }
         return parsed.toString();
     }
     catch (error) {
         if (error instanceof TypeError) {
-            throw new Error("Input must be a valid Bilibili video URL or a BV id.");
+            throw new Error("输入必须是有效的哔哩哔哩视频链接或 BV 号。");
         }
         throw error;
     }
@@ -48,11 +48,11 @@ export async function searchVideos(query, account) {
         },
     });
     if (!response.ok) {
-        throw new Error(`Bilibili search failed with HTTP ${response.status} ${response.statusText}.`);
+        throw new Error(`哔哩哔哩搜索失败：HTTP ${response.status} ${response.statusText}。`);
     }
     const payload = (await response.json());
     if (payload.code !== 0) {
-        throw new Error(`Bilibili search failed: ${payload.message ?? `code ${payload.code ?? "unknown"}`}`);
+        throw new Error(`哔哩哔哩搜索失败：${payload.message ?? `返回码 ${payload.code ?? "未知"}`}`);
     }
     return (payload.data?.result ?? [])
         .map((item) => buildSearchResult(item))
@@ -79,11 +79,11 @@ export async function fetchRecommendedVideos(account) {
         },
     });
     if (!response.ok) {
-        throw new Error(`Bilibili recommendations failed with HTTP ${response.status} ${response.statusText}.`);
+        throw new Error(`哔哩哔哩推荐流加载失败：HTTP ${response.status} ${response.statusText}。`);
     }
     const payload = (await response.json());
     if (payload.code !== 0) {
-        throw new Error(`Bilibili recommendations failed: ${payload.message ?? `code ${payload.code ?? "unknown"}`}`);
+        throw new Error(`哔哩哔哩推荐流加载失败：${payload.message ?? `返回码 ${payload.code ?? "未知"}`}`);
     }
     const results = [];
     for (const item of payload.data?.item ?? []) {
@@ -93,9 +93,9 @@ export async function fetchRecommendedVideos(account) {
         }
         results.push({
             providerId: "bilibili",
-            providerLabel: "Bilibili",
+            providerLabel: "哔哩哔哩",
             title: cleanSearchText(item.title) || bvid,
-            ownerName: cleanSearchText(item.owner?.name) || "Unknown uploader",
+            ownerName: cleanSearchText(item.owner?.name) || "未知 UP 主",
             durationSeconds: item.duration,
             viewCount: item.stat?.view,
             publishedAt: item.pubdate ? new Date(item.pubdate * 1000).toISOString() : undefined,
@@ -115,7 +115,7 @@ async function fetchHtml(url, account) {
         },
     });
     if (!response.ok) {
-        throw new Error(`Failed to fetch ${url}: ${response.status} ${response.statusText}`);
+        throw new Error(`加载页面失败：${url}（${response.status} ${response.statusText}）`);
     }
     return response.text();
 }
@@ -132,12 +132,12 @@ function buildVideoSession(pageUrl, playData, videoData) {
     const videoTracks = playData.dash?.video ?? [];
     const audioTracks = playData.dash?.audio ?? [];
     if (videoTracks.length === 0 || audioTracks.length === 0) {
-        throw new Error("This page did not expose a playable DASH video/audio pair.");
+        throw new Error("当前页面没有暴露可播放的 DASH 音视频流。");
     }
     const bestAudio = chooseBestAudio(audioTracks);
     const variants = buildVariants(playData, videoTracks, bestAudio);
     if (variants.length === 0) {
-        throw new Error("No supported stream variants were found on the page.");
+        throw new Error("当前页面没有找到可用的清晰度码流。");
     }
     return {
         pageUrl,
@@ -149,7 +149,7 @@ function buildVideoSession(pageUrl, playData, videoData) {
         title: videoData.title,
         description: videoData.desc,
         durationSeconds: Math.round(playData.timelength / 1000) || videoData.duration,
-        ownerName: videoData.owner?.name ?? "Unknown uploader",
+        ownerName: videoData.owner?.name ?? "未知 UP 主",
         stats: {
             views: videoData.stat?.view,
             likes: videoData.stat?.like,
@@ -214,7 +214,7 @@ function codecScore(codecid) {
 }
 function buildVariantLabel(quality, format, track) {
     const base = format?.new_description ?? format?.display_desc ?? `${quality}P`;
-    const size = track.width && track.height ? `${track.width}x${track.height}` : "unknown size";
+    const size = track.width && track.height ? `${track.width}x${track.height}` : "尺寸未知";
     return `${base}  ${size}`;
 }
 function buildCodecLabel(video, audio) {
@@ -224,7 +224,7 @@ function buildCodecLabel(video, audio) {
 }
 function simplifyCodec(value) {
     if (!value) {
-        return "unknown";
+        return "未知";
     }
     if (value.startsWith("avc1")) {
         return "H.264";
@@ -240,7 +240,7 @@ function simplifyCodec(value) {
 function trackUrl(track) {
     const url = track.baseUrl ?? track.base_url;
     if (!url) {
-        throw new Error("Stream track is missing a usable URL.");
+        throw new Error("码流缺少可用的地址。");
     }
     return url;
 }
@@ -258,14 +258,14 @@ function extractExpiry(url) {
 function extractJsonObject(html, marker) {
     const markerIndex = html.indexOf(marker);
     if (markerIndex === -1) {
-        throw new Error(`Could not find ${marker} in the page HTML.`);
+        throw new Error(`页面 HTML 里没有找到 ${marker}。`);
     }
     let current = markerIndex + marker.length;
     while (/\s/.test(html[current] ?? "")) {
         current += 1;
     }
     if (html[current] !== "{") {
-        throw new Error(`Expected a JSON object after ${marker}.`);
+        throw new Error(`${marker} 后面不是预期的 JSON 对象。`);
     }
     let depth = 0;
     let inString = false;
@@ -300,7 +300,7 @@ function extractJsonObject(html, marker) {
             }
         }
     }
-    throw new Error(`Unterminated JSON object for ${marker}.`);
+    throw new Error(`${marker} 对应的 JSON 对象没有正常结束。`);
 }
 function buildSearchResult(item) {
     const bvid = extractBvid(item);
@@ -310,10 +310,10 @@ function buildSearchResult(item) {
     const pageUrl = `${BILIBILI_SOURCE_ORIGIN}/video/${bvid}/`;
     return {
         providerId: "bilibili",
-        providerLabel: "Bilibili",
+        providerLabel: "哔哩哔哩",
         title: cleanSearchText(item.title) || bvid,
         description: cleanSearchText(item.description),
-        ownerName: cleanSearchText(item.author) || "Unknown uploader",
+        ownerName: cleanSearchText(item.author) || "未知 UP 主",
         durationSeconds: parseDurationText(item.duration),
         viewCount: item.play,
         publishedAt: item.pubdate ? new Date(item.pubdate * 1000).toISOString() : undefined,

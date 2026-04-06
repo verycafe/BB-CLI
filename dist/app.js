@@ -13,7 +13,7 @@ const HOME_TABS = [
         label: "发现",
         summary: "推荐视频与内容入口。",
         highlights: [
-            "Bilibili 首页推荐",
+            "哔哩哔哩首页推荐",
             "后续接入 YouTube / Instagram",
             "回车进入内容流",
         ],
@@ -43,7 +43,7 @@ const HOME_TABS = [
         label: "账号",
         summary: "绑定平台账号与身份。",
         highlights: [
-            "Bilibili 账号",
+            "哔哩哔哩账号",
             "后续支持更多平台",
             "管理默认身份",
         ],
@@ -368,7 +368,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
             openHomeWorkspace("search");
             setSearch((current) => ({
                 ...current,
-                message: "输入关键词，或粘贴 Bilibili 链接后按回车。",
+                message: "输入关键词，或粘贴哔哩哔哩链接后按回车。",
             }));
             return;
         }
@@ -433,7 +433,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
             openHomeWorkspace("search");
             setSearch((current) => ({
                 ...current,
-                message: "输入关键词，或粘贴 Bilibili 链接后按回车。",
+                message: "输入关键词，或粘贴哔哩哔哩链接后按回车。",
             }));
             return;
         }
@@ -535,7 +535,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
             if (!trimmed) {
                 setSearch((current) => ({
                     ...current,
-                    message: "请输入关键词，或粘贴 Bilibili 链接后按回车。",
+                    message: "请输入关键词，或粘贴哔哩哔哩链接后按回车。",
                 }));
                 return;
             }
@@ -763,14 +763,14 @@ function HomeScreen({ view, tab, menuIndex, providerLabel, inspectOnly, provider
                 ? "个人书架"
                 : providerLabel;
     const activeMenu = HOME_TABS[menuIndex];
-    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(BrandHeader, { activeTab: view === "menu" ? undefined : tab, providerLabel: activeLaneLabel, inspectOnly: view === "workspace" ? inspectOnly : false }), _jsx(Newline, {}), view === "menu" ? _jsx(MenuScreen, { selectedIndex: menuIndex }) : null, view === "workspace" ? _jsx(WorkspaceHeader, { tab: tab, providerLabel: activeLaneLabel }) : null, view === "workspace" ? _jsx(Newline, {}) : null, view === "workspace" && tab === "discover" ? _jsx(RecommendationPanel, { state: recommendations }) : null, view === "workspace" && tab === "search" ? _jsx(SearchPanel, { state: search }) : null, view === "workspace" && tab === "library" ? _jsx(LibraryPanel, { providers: providers }) : null, view === "workspace" && tab === "accounts" ? _jsx(AccountPanel, { state: accountForm, providerLabel: accountProviderLabel, accountProviderId: accountProviderId, providers: providers }) : null, _jsx(Newline, {}), !isInteractive ? _jsx(Text, { dimColor: true, children: "\u5F53\u524D\u7EC8\u7AEF\u4E0D\u652F\u6301\u4EA4\u4E92\u8F93\u5165\uFF0C\u8BF7\u5728\u6B63\u5E38\u7EC8\u7AEF\u91CC\u8FD0\u884C BBCLI\u3002" }) : null, isInteractive && view === "menu" ? _jsx(Text, { dimColor: true, children: `${activeMenu?.label ?? "菜单"}  ·  ↑↓ 选择  ·  Enter 进入  ·  直接输入搜索` }) : null, isInteractive && view === "workspace" && tab === "discover" ? _jsx(Text, { dimColor: true, children: "\u2191\u2193 \u9009\u62E9  \u00B7  Enter \u6253\u5F00  \u00B7  r \u5237\u65B0  \u00B7  b \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "search" ? _jsx(Text, { dimColor: true, children: "Enter \u641C\u7D22\u6216\u6253\u5F00  \u00B7  \u2191\u2193 \u9009\u62E9  \u00B7  Esc / b \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "library" ? _jsx(Text, { dimColor: true, children: "b \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "accounts" ? _jsx(Text, { dimColor: true, children: '[`] 切平台  ·  Tab 切字段  ·  Enter 绑定  ·  b 返回' }) : null] }));
+    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(BrandHeader, { activeTab: view === "menu" ? undefined : tab, providerLabel: activeLaneLabel, inspectOnly: view === "workspace" ? inspectOnly : false }), _jsx(Newline, {}), view === "menu" ? _jsx(MenuScreen, { selectedIndex: menuIndex }) : null, view === "workspace" ? _jsx(WorkspaceHeader, { tab: tab, providerLabel: activeLaneLabel }) : null, view === "workspace" ? _jsx(Newline, {}) : null, view === "workspace" && tab === "discover" ? _jsx(RecommendationPanel, { state: recommendations }) : null, view === "workspace" && tab === "search" ? _jsx(SearchPanel, { state: search }) : null, view === "workspace" && tab === "library" ? _jsx(LibraryPanel, { providers: providers }) : null, view === "workspace" && tab === "accounts" ? _jsx(AccountPanel, { state: accountForm, providerLabel: accountProviderLabel, accountProviderId: accountProviderId, providers: providers }) : null, _jsx(Newline, {}), !isInteractive ? _jsx(Text, { dimColor: true, children: "\u5F53\u524D\u7EC8\u7AEF\u4E0D\u652F\u6301\u4EA4\u4E92\u8F93\u5165\uFF0C\u8BF7\u5728\u6B63\u5E38\u7EC8\u7AEF\u91CC\u8FD0\u884C BBCLI\u3002" }) : null, isInteractive && view === "menu" ? _jsx(Text, { dimColor: true, children: `${activeMenu?.label ?? "菜单"}  ·  ← → 切换  ·  Enter 进入  ·  直接输入可搜索` }) : null, isInteractive && view === "workspace" && tab === "discover" ? _jsx(Text, { dimColor: true, children: "\u2191\u2193 \u9009\u89C6\u9891  \u00B7  Enter \u6253\u5F00  \u00B7  r \u5237\u65B0  \u00B7  b \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "search" ? _jsx(Text, { dimColor: true, children: "\u8F93\u5165\u540E\u56DE\u8F66  \u00B7  \u2191\u2193 \u9009\u7ED3\u679C  \u00B7  Esc \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "library" ? _jsx(Text, { dimColor: true, children: "Esc \u6216 b \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "accounts" ? _jsx(Text, { dimColor: true, children: '[`] 切平台  ·  Tab 切字段  ·  Enter 保存  ·  Esc 返回' }) : null] }));
 }
 function MenuScreen({ selectedIndex }) {
     const activeItem = HOME_TABS[selectedIndex];
     return (_jsxs(Box, { flexDirection: "column", children: [_jsx(Box, { children: HOME_TABS.map((item, index) => {
                     const selected = index === selectedIndex;
-                    return (_jsxs(React.Fragment, { children: [_jsx(Text, { color: selected ? "yellow" : "gray", bold: selected, children: selected ? `[ ${item.label} ]` : item.label }), index < HOME_TABS.length - 1 ? _jsx(Text, { children: "  " }) : null] }, item.id));
-                }) }), _jsx(Newline, {}), _jsx(Text, { children: activeItem.summary }), _jsx(Newline, {}), activeItem.highlights.map((line, index) => (_jsx(Text, { dimColor: true, children: `${index === 0 ? ">" : " "} ${line}` }, `${activeItem.id}-${index}`)))] }));
+                    return (_jsxs(React.Fragment, { children: [_jsx(Text, { backgroundColor: selected ? "cyan" : undefined, color: selected ? "black" : "gray", bold: selected, children: selected ? ` ${item.label} ` : item.label }), index < HOME_TABS.length - 1 ? _jsx(Text, { children: "  " }) : null] }, item.id));
+                }) }), _jsx(Newline, {}), _jsx(Text, { bold: true, children: activeItem.summary }), _jsx(Newline, {}), activeItem.highlights.map((line, index) => (_jsx(Text, { dimColor: true, children: `${index === 0 ? ">" : "·"} ${line}` }, `${activeItem.id}-${index}`)))] }));
 }
 function WorkspaceHeader({ tab, providerLabel }) {
     return (_jsxs(Box, { children: [_jsx(Text, { dimColor: true, children: "\u2190 \u83DC\u5355" }), _jsx(Text, { dimColor: true, children: "  /  " }), _jsx(Text, { bold: true, children: formatHomeTab(tab) }), _jsx(Text, { dimColor: true, children: `  /  ${providerLabel}` })] }));
@@ -781,18 +781,16 @@ function BrandHeader({ activeTab, providerLabel, inspectOnly, }) {
         "  (='.'=)",
         '  (")_(")',
     ];
-    return (_jsxs(Box, { flexDirection: "column", children: [_jsxs(Box, { children: [_jsx(Box, { flexDirection: "column", marginRight: 2, children: mascotLines.map((line) => (_jsx(Text, { color: "yellow", children: line }, line))) }), _jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { color: "cyan", bold: true, children: "BBCLI" }), _jsx(Text, { bold: true, children: "\u7EC8\u7AEF\u91CC\u7684\u5185\u5BB9\u5154\u5154\u5DE5\u5177\u7BB1" }), _jsx(Text, { dimColor: true, children: activeTab ? `当前页面：${formatHomeTab(activeTab)}  |  当前通道：${providerLabel}  |  模式：${inspectOnly ? "检查" : "播放"}` : "选择一个入口开始。" })] })] }), _jsx(Text, { dimColor: true, children: "-".repeat(78) })] }));
+    return (_jsxs(Box, { flexDirection: "column", children: [_jsxs(Box, { children: [_jsx(Box, { flexDirection: "column", marginRight: 2, children: mascotLines.map((line) => (_jsx(Text, { color: "yellow", children: line }, line))) }), _jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { color: "cyan", bold: true, children: "BBCLI" }), _jsx(Text, { bold: true, children: "\u7EC8\u7AEF\u91CC\u7684\u5185\u5BB9\u5154\u5154\u5DE5\u5177\u7BB1" }), _jsx(Text, { dimColor: true, children: activeTab ? `页面：${formatHomeTab(activeTab)}  ·  通道：${providerLabel}  ·  模式：${inspectOnly ? "检查" : "播放"}` : "选择一个入口开始。" })] })] }), _jsx(Text, { dimColor: true, children: "-".repeat(78) })] }));
 }
 function RecommendationPanel({ state }) {
     return (_jsxs(Box, { flexDirection: "column", children: [!state.loading && state.items.length > 0 ? _jsx(Text, { dimColor: true, children: `共 ${state.items.length} 条推荐` }) : null, !state.loading && state.items.length > 0 ? _jsx(Newline, {}) : null, state.loading ? _jsx(Text, { dimColor: true, children: "\u6B63\u5728\u52A0\u8F7D\u9996\u9875\u63A8\u8350..." }) : null, !state.loading && state.items.length === 0 ? _jsx(Text, { dimColor: true, children: state.message ?? "当前还没有推荐内容。" }) : null, state.items.slice(0, 8).map((item, index) => {
-                const selected = index === state.selectedIndex;
-                return (_jsxs(Box, { flexDirection: "column", marginBottom: 1, children: [_jsx(Text, { color: selected ? "yellow" : undefined, children: `${selected ? ">" : " "} ${item.title}` }), _jsx(Text, { dimColor: true, children: `${item.ownerName}  |  ${formatDuration(item.durationSeconds ?? 0)}  |  ${formatCount(item.viewCount)}` })] }, `${item.pageUrl}-${index}`));
+                return _jsx(MediaListItem, { item: item, selected: index === state.selectedIndex }, `${item.pageUrl}-${index}`);
             }), state.message && state.items.length > 0 ? _jsx(Text, { color: "yellow", children: state.message }) : null] }));
 }
 function SearchPanel({ state }) {
-    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { children: `> ${state.query || "输入关键词，或粘贴视频链接..."}` }), !state.loading && state.results.length > 0 ? _jsx(Text, { dimColor: true, children: `结果 ${state.results.length} 条` }) : null, state.loading ? _jsx(Text, { dimColor: true, children: "\u6B63\u5728\u641C\u7D22..." }) : null, state.message ? _jsx(Text, { color: "yellow", children: state.message }) : null, state.results.map((item, index) => {
-                const selected = index === state.selectedIndex;
-                return (_jsxs(Box, { flexDirection: "column", marginBottom: 1, children: [_jsx(Text, { color: selected ? "yellow" : undefined, children: `${selected ? ">" : " "} ${item.title}` }), _jsx(Text, { dimColor: true, children: `${item.ownerName}  |  ${formatDuration(item.durationSeconds ?? 0)}  |  ${formatCount(item.viewCount)}` })] }, `${item.pageUrl}-${index}`));
+    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { children: `> ${state.query || "输入关键词或粘贴视频链接"}` }), !state.loading && state.results.length > 0 ? _jsx(Text, { dimColor: true, children: `结果 ${state.results.length} 条` }) : null, !state.loading && state.results.length > 0 ? _jsx(Newline, {}) : null, state.loading ? _jsx(Text, { dimColor: true, children: "\u6B63\u5728\u641C\u7D22..." }) : null, state.message ? _jsx(Text, { color: "yellow", children: state.message }) : null, state.results.map((item, index) => {
+                return _jsx(MediaListItem, { item: item, selected: index === state.selectedIndex }, `${item.pageUrl}-${index}`);
             })] }));
 }
 function LibraryPanel({ providers }) {
@@ -812,16 +810,22 @@ function AccountPanel({ state, providerLabel, accountProviderId, providers, }) {
     }));
     const plannedConnectors = ACCOUNT_CONNECTORS.filter((connector) => !liveConnectors.some((provider) => provider.id === connector.id));
     const accountConnectors = [...liveConnectors, ...plannedConnectors];
-    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(CompactConnectorRow, { items: accountConnectors, activeId: accountProviderId }), _jsx(Newline, {}), _jsx(Text, { color: "green", children: "\u8D26\u53F7\u8868\u5355" }), _jsx(Text, { dimColor: true, children: state.existingAccounts.length > 0 ? `已有账号：${state.existingAccounts.join(", ")}${state.defaultAccount ? `  ·  默认 ${state.defaultAccount}` : ""}` : "当前还没有已绑定账号。" }), _jsx(Newline, {}), _jsx(FormField, { label: "\u8D26\u53F7\u540D", value: state.name || "main", selected: state.activeField === "name" }), _jsx(Text, { dimColor: true, children: `模式 ${state.inputMode === "cookie" ? "粘贴 Cookie" : "Cookie 文件路径"}  ·  默认 ${state.makeDefault ? "是" : "否"}` }), _jsx(FormField, { label: state.inputMode === "cookie" ? "Cookie" : "Cookie 文件", value: formatAccountValue(state.inputMode, state.value), selected: state.activeField === "value" }), _jsx(FormField, { label: "\u5907\u6CE8", value: state.note || "可选", selected: state.activeField === "note" }), state.busy ? _jsx(Text, { dimColor: true, children: "\u5904\u7406\u4E2D..." }) : null, state.message ? _jsx(Text, { color: "yellow", children: state.message }) : null] }));
+    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(CompactConnectorRow, { items: accountConnectors, activeId: accountProviderId }), _jsx(Newline, {}), _jsx(Text, { color: "green", children: `绑定账号  ·  ${providerLabel}` }), _jsx(Newline, {}), _jsx(FieldGroup, { title: "\u5DF2\u7ED1\u5B9A", children: _jsx(Text, { dimColor: true, children: state.existingAccounts.length > 0 ? `${state.existingAccounts.join("、")}${state.defaultAccount ? `  ·  默认 ${state.defaultAccount}` : ""}` : "当前还没有已绑定账号。" }) }), _jsx(Newline, {}), _jsxs(FieldGroup, { title: "\u7ED1\u5B9A\u8868\u5355", children: [_jsx(FormField, { label: "\u8D26\u53F7\u540D", value: state.name || "main", selected: state.activeField === "name" }), _jsx(Text, { dimColor: true, children: `模式 ${state.inputMode === "cookie" ? "粘贴 Cookie" : "Cookie 文件路径"}  ·  默认 ${state.makeDefault ? "是" : "否"}` }), _jsx(FormField, { label: state.inputMode === "cookie" ? "Cookie" : "Cookie 文件", value: formatAccountValue(state.inputMode, state.value), selected: state.activeField === "value" }), _jsx(FormField, { label: "\u5907\u6CE8", value: state.note || "可选", selected: state.activeField === "note" })] }), state.busy ? _jsx(Text, { dimColor: true, children: "\u5904\u7406\u4E2D..." }) : null, state.message ? _jsx(Text, { color: "yellow", children: state.message }) : null] }));
+}
+function MediaListItem({ item, selected, }) {
+    return (_jsxs(Box, { flexDirection: "column", marginBottom: 1, children: [_jsx(Text, { backgroundColor: selected ? "cyan" : undefined, color: selected ? "black" : undefined, bold: selected, children: `${selected ? " 当前 " : "  "}${item.title}` }), _jsx(Text, { dimColor: true, children: `${selected ? "  " : "    "}${item.ownerName}  ·  ${formatDuration(item.durationSeconds ?? 0)}  ·  ${formatCount(item.viewCount)}` })] }));
+}
+function FieldGroup({ title, children }) {
+    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { dimColor: true, children: `[ ${title} ]` }), children] }));
 }
 function FormField({ label, value, selected, }) {
-    return _jsx(Text, { color: selected ? "yellow" : undefined, children: `${selected ? ">" : " "} ${label}  ${value}` });
+    return _jsx(Text, { color: selected ? "yellow" : undefined, children: `${selected ? ">" : " "} ${label}：${value}` });
 }
 function CompactConnectorRow({ items, activeId, }) {
     return (_jsx(Box, { children: items.map((item, index) => {
             const active = item.id === activeId;
-            const label = active ? `[${item.label}]` : item.status === "planned" ? `${item.label}·规划中` : item.label;
-            return (_jsxs(React.Fragment, { children: [_jsx(Text, { color: active ? "yellow" : item.status === "planned" ? "gray" : undefined, children: label }), index < items.length - 1 ? _jsx(Text, { children: "  " }) : null] }, item.id));
+            const label = active ? ` ${item.label} ` : item.status === "planned" ? `${item.label}·规划中` : item.label;
+            return (_jsxs(React.Fragment, { children: [_jsx(Text, { backgroundColor: active ? "cyan" : undefined, color: active ? "black" : item.status === "planned" ? "gray" : undefined, bold: active, children: label }), index < items.length - 1 ? _jsx(Text, { children: "  " }) : null] }, item.id));
         }) }));
 }
 function formatHomeTab(tab) {

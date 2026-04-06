@@ -10,7 +10,7 @@ export type WorkspaceConnector = {
 export const DISCOVER_CONNECTORS: WorkspaceConnector[] = [
   {
     id: "bilibili",
-    label: "Bilibili",
+    label: "哔哩哔哩",
     status: "live",
     note: "首页推荐、可播放视频，以及带账号态的媒体流程。",
   },
@@ -24,14 +24,14 @@ export const DISCOVER_CONNECTORS: WorkspaceConnector[] = [
     id: "instagram",
     label: "Instagram",
     status: "planned",
-    note: "Reels、创作者时间线、收藏内容和轻量媒体浏览。",
+    note: "Reels 短视频、创作者时间线、收藏内容和轻量媒体浏览。",
   },
 ];
 
 export const SEARCH_CONNECTORS: WorkspaceConnector[] = [
   {
     id: "bilibili",
-    label: "Bilibili",
+    label: "哔哩哔哩",
     status: "live",
     note: "关键词搜视频，并能在同一个启动器里直接打开链接。",
   },
@@ -58,7 +58,7 @@ export const SEARCH_CONNECTORS: WorkspaceConnector[] = [
 export const LIBRARY_CONNECTORS: WorkspaceConnector[] = [
   {
     id: "weread",
-    label: "WeRead",
+    label: "微信读书",
     status: "planned",
     note: "云端书架、当前阅读进度、划线和收藏书籍。",
   },
@@ -79,13 +79,13 @@ export const LIBRARY_CONNECTORS: WorkspaceConnector[] = [
 export const ACCOUNT_CONNECTORS: WorkspaceConnector[] = [
   {
     id: "bilibili",
-    label: "Bilibili",
+    label: "哔哩哔哩",
     status: "live",
     note: "现在已经支持基于 Cookie 的账号绑定。",
   },
   {
     id: "weread",
-    label: "WeRead",
+    label: "微信读书",
     status: "planned",
     note: "未来支持书架同步、阅读历史和远程书籍访问。",
   },

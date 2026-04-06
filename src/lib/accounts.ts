@@ -47,7 +47,7 @@ export async function bindAccount(input: BindAccountInput): Promise<ResolvedAcco
   validateAccountName(input.name);
 
   if (Object.keys(input.headers).length === 0) {
-    throw new Error("Binding an account requires at least one header, cookie, or token.");
+    throw new Error("绑定账号时至少要提供一个请求头、Cookie 或 Token。");
   }
 
   return withStoreLock(async () => {
@@ -162,7 +162,7 @@ export async function setDefaultAccount(provider: string, name: string): Promise
     const normalizedProvider = provider.toLowerCase();
     const account = store.accounts.find((entry) => entry.provider === normalizedProvider && entry.name === name);
     if (!account) {
-      throw new Error(`No account named "${name}" exists for provider "${normalizedProvider}".`);
+      throw new Error(`平台 "${normalizedProvider}" 下不存在名为 "${name}" 的账号。`);
     }
 
     store.defaults[normalizedProvider] = name;
@@ -226,7 +226,7 @@ async function loadAccountsStore(): Promise<AccountsStore> {
     const parsed = JSON.parse(raw) as AccountsStore;
 
     if (parsed.version !== ACCOUNTS_STORE_VERSION || !Array.isArray(parsed.accounts) || typeof parsed.defaults !== "object" || parsed.defaults === null) {
-      throw new Error(`Unsupported account store format at ${storePath}.`);
+      throw new Error(`账号存储格式不受支持：${storePath}。`);
     }
 
     return {
@@ -277,7 +277,7 @@ async function withStoreLock<T>(callback: () => Promise<T>): Promise<T> {
       }
 
       if (Date.now() - startedAt > 5000) {
-        throw new Error(`Timed out waiting for account store lock at ${lockPath}.`);
+        throw new Error(`等待账号存储锁超时：${lockPath}。`);
       }
 
       await sleep(50);
@@ -309,13 +309,13 @@ function normalizeHeaderName(value: string): string {
 
 function validateProvider(provider: string): void {
   if (!/^[a-z][a-z0-9_-]{1,31}$/i.test(provider)) {
-    throw new Error("Provider must be 2-32 characters and contain only letters, digits, underscores, or hyphens.");
+    throw new Error("平台 ID 必须是 2 到 32 个字符，只能包含字母、数字、下划线或连字符。");
   }
 }
 
 function validateAccountName(name: string): void {
   if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/.test(name)) {
-    throw new Error("Account name must be 1-64 characters and contain only letters, digits, dots, underscores, or hyphens.");
+    throw new Error("账号名必须是 1 到 64 个字符，只能包含字母、数字、点、下划线或连字符。");
   }
 }
 

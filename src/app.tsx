@@ -107,7 +107,7 @@ const HOME_TABS: Array<{
     label: "发现",
     summary: "推荐视频与内容入口。",
     highlights: [
-      "Bilibili 首页推荐",
+      "哔哩哔哩首页推荐",
       "后续接入 YouTube / Instagram",
       "回车进入内容流",
     ],
@@ -137,7 +137,7 @@ const HOME_TABS: Array<{
     label: "账号",
     summary: "绑定平台账号与身份。",
     highlights: [
-      "Bilibili 账号",
+      "哔哩哔哩账号",
       "后续支持更多平台",
       "管理默认身份",
     ],
@@ -512,7 +512,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
       openHomeWorkspace("search");
       setSearch((current) => ({
         ...current,
-        message: "输入关键词，或粘贴 Bilibili 链接后按回车。",
+        message: "输入关键词，或粘贴哔哩哔哩链接后按回车。",
       }));
       return;
     }
@@ -590,7 +590,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
       openHomeWorkspace("search");
       setSearch((current) => ({
         ...current,
-        message: "输入关键词，或粘贴 Bilibili 链接后按回车。",
+        message: "输入关键词，或粘贴哔哩哔哩链接后按回车。",
       }));
       return;
     }
@@ -705,7 +705,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
       if (!trimmed) {
         setSearch((current) => ({
           ...current,
-          message: "请输入关键词，或粘贴 Bilibili 链接后按回车。",
+          message: "请输入关键词，或粘贴哔哩哔哩链接后按回车。",
         }));
         return;
       }
@@ -1055,11 +1055,11 @@ function HomeScreen({
 
       <Newline />
       {!isInteractive ? <Text dimColor>当前终端不支持交互输入，请在正常终端里运行 BBCLI。</Text> : null}
-      {isInteractive && view === "menu" ? <Text dimColor>{`${activeMenu?.label ?? "菜单"}  ·  ↑↓ 选择  ·  Enter 进入  ·  直接输入搜索`}</Text> : null}
-      {isInteractive && view === "workspace" && tab === "discover" ? <Text dimColor>↑↓ 选择  ·  Enter 打开  ·  r 刷新  ·  b 返回</Text> : null}
-      {isInteractive && view === "workspace" && tab === "search" ? <Text dimColor>Enter 搜索或打开  ·  ↑↓ 选择  ·  Esc / b 返回</Text> : null}
-      {isInteractive && view === "workspace" && tab === "library" ? <Text dimColor>b 返回</Text> : null}
-      {isInteractive && view === "workspace" && tab === "accounts" ? <Text dimColor>{'[`] 切平台  ·  Tab 切字段  ·  Enter 绑定  ·  b 返回'}</Text> : null}
+      {isInteractive && view === "menu" ? <Text dimColor>{`${activeMenu?.label ?? "菜单"}  ·  ← → 切换  ·  Enter 进入  ·  直接输入可搜索`}</Text> : null}
+      {isInteractive && view === "workspace" && tab === "discover" ? <Text dimColor>↑↓ 选视频  ·  Enter 打开  ·  r 刷新  ·  b 返回</Text> : null}
+      {isInteractive && view === "workspace" && tab === "search" ? <Text dimColor>输入后回车  ·  ↑↓ 选结果  ·  Esc 返回</Text> : null}
+      {isInteractive && view === "workspace" && tab === "library" ? <Text dimColor>Esc 或 b 返回</Text> : null}
+      {isInteractive && view === "workspace" && tab === "accounts" ? <Text dimColor>{'[`] 切平台  ·  Tab 切字段  ·  Enter 保存  ·  Esc 返回'}</Text> : null}
     </Box>
   );
 }
@@ -1074,17 +1074,23 @@ function MenuScreen({selectedIndex}: {selectedIndex: number}) {
           const selected = index === selectedIndex;
           return (
             <React.Fragment key={item.id}>
-              <Text color={selected ? "yellow" : "gray"} bold={selected}>{selected ? `[ ${item.label} ]` : item.label}</Text>
+              <Text
+                backgroundColor={selected ? "cyan" : undefined}
+                color={selected ? "black" : "gray"}
+                bold={selected}
+              >
+                {selected ? ` ${item.label} ` : item.label}
+              </Text>
               {index < HOME_TABS.length - 1 ? <Text>  </Text> : null}
             </React.Fragment>
           );
         })}
       </Box>
       <Newline />
-      <Text>{activeItem.summary}</Text>
+      <Text bold>{activeItem.summary}</Text>
       <Newline />
       {activeItem.highlights.map((line, index) => (
-        <Text key={`${activeItem.id}-${index}`} dimColor>{`${index === 0 ? ">" : " "} ${line}`}</Text>
+        <Text key={`${activeItem.id}-${index}`} dimColor>{`${index === 0 ? ">" : "·"} ${line}`}</Text>
       ))}
     </Box>
   );
@@ -1131,7 +1137,7 @@ function BrandHeader({
             BBCLI
           </Text>
           <Text bold>终端里的内容兔兔工具箱</Text>
-          <Text dimColor>{activeTab ? `当前页面：${formatHomeTab(activeTab)}  |  当前通道：${providerLabel}  |  模式：${inspectOnly ? "检查" : "播放"}` : "选择一个入口开始。"}</Text>
+          <Text dimColor>{activeTab ? `页面：${formatHomeTab(activeTab)}  ·  通道：${providerLabel}  ·  模式：${inspectOnly ? "检查" : "播放"}` : "选择一个入口开始。"}</Text>
         </Box>
       </Box>
       <Text dimColor>{"-".repeat(78)}</Text>
@@ -1147,13 +1153,7 @@ function RecommendationPanel({state}: {state: RecommendationState}) {
       {state.loading ? <Text dimColor>正在加载首页推荐...</Text> : null}
       {!state.loading && state.items.length === 0 ? <Text dimColor>{state.message ?? "当前还没有推荐内容。"}</Text> : null}
       {state.items.slice(0, 8).map((item, index) => {
-        const selected = index === state.selectedIndex;
-        return (
-          <Box key={`${item.pageUrl}-${index}`} flexDirection="column" marginBottom={1}>
-            <Text color={selected ? "yellow" : undefined}>{`${selected ? ">" : " "} ${item.title}`}</Text>
-            <Text dimColor>{`${item.ownerName}  |  ${formatDuration(item.durationSeconds ?? 0)}  |  ${formatCount(item.viewCount)}`}</Text>
-          </Box>
-        );
+        return <MediaListItem key={`${item.pageUrl}-${index}`} item={item} selected={index === state.selectedIndex} />;
       })}
       {state.message && state.items.length > 0 ? <Text color="yellow">{state.message}</Text> : null}
     </Box>
@@ -1163,18 +1163,13 @@ function RecommendationPanel({state}: {state: RecommendationState}) {
 function SearchPanel({state}: {state: SearchState}) {
   return (
     <Box flexDirection="column">
-      <Text>{`> ${state.query || "输入关键词，或粘贴视频链接..."}`}</Text>
+      <Text>{`> ${state.query || "输入关键词或粘贴视频链接"}`}</Text>
       {!state.loading && state.results.length > 0 ? <Text dimColor>{`结果 ${state.results.length} 条`}</Text> : null}
+      {!state.loading && state.results.length > 0 ? <Newline /> : null}
       {state.loading ? <Text dimColor>正在搜索...</Text> : null}
       {state.message ? <Text color="yellow">{state.message}</Text> : null}
       {state.results.map((item, index) => {
-        const selected = index === state.selectedIndex;
-        return (
-          <Box key={`${item.pageUrl}-${index}`} flexDirection="column" marginBottom={1}>
-            <Text color={selected ? "yellow" : undefined}>{`${selected ? ">" : " "} ${item.title}`}</Text>
-            <Text dimColor>{`${item.ownerName}  |  ${formatDuration(item.durationSeconds ?? 0)}  |  ${formatCount(item.viewCount)}`}</Text>
-          </Box>
-        );
+        return <MediaListItem key={`${item.pageUrl}-${index}`} item={item} selected={index === state.selectedIndex} />;
       })}
     </Box>
   );
@@ -1225,15 +1220,50 @@ function AccountPanel({
     <Box flexDirection="column">
       <CompactConnectorRow items={accountConnectors} activeId={accountProviderId} />
       <Newline />
-      <Text color="green">账号表单</Text>
-      <Text dimColor>{state.existingAccounts.length > 0 ? `已有账号：${state.existingAccounts.join(", ")}${state.defaultAccount ? `  ·  默认 ${state.defaultAccount}` : ""}` : "当前还没有已绑定账号。"}</Text>
+      <Text color="green">{`绑定账号  ·  ${providerLabel}`}</Text>
       <Newline />
-      <FormField label="账号名" value={state.name || "main"} selected={state.activeField === "name"} />
-      <Text dimColor>{`模式 ${state.inputMode === "cookie" ? "粘贴 Cookie" : "Cookie 文件路径"}  ·  默认 ${state.makeDefault ? "是" : "否"}`}</Text>
-      <FormField label={state.inputMode === "cookie" ? "Cookie" : "Cookie 文件"} value={formatAccountValue(state.inputMode, state.value)} selected={state.activeField === "value"} />
-      <FormField label="备注" value={state.note || "可选"} selected={state.activeField === "note"} />
+      <FieldGroup title="已绑定">
+        <Text dimColor>{state.existingAccounts.length > 0 ? `${state.existingAccounts.join("、")}${state.defaultAccount ? `  ·  默认 ${state.defaultAccount}` : ""}` : "当前还没有已绑定账号。"}</Text>
+      </FieldGroup>
+      <Newline />
+      <FieldGroup title="绑定表单">
+        <FormField label="账号名" value={state.name || "main"} selected={state.activeField === "name"} />
+        <Text dimColor>{`模式 ${state.inputMode === "cookie" ? "粘贴 Cookie" : "Cookie 文件路径"}  ·  默认 ${state.makeDefault ? "是" : "否"}`}</Text>
+        <FormField label={state.inputMode === "cookie" ? "Cookie" : "Cookie 文件"} value={formatAccountValue(state.inputMode, state.value)} selected={state.activeField === "value"} />
+        <FormField label="备注" value={state.note || "可选"} selected={state.activeField === "note"} />
+      </FieldGroup>
       {state.busy ? <Text dimColor>处理中...</Text> : null}
       {state.message ? <Text color="yellow">{state.message}</Text> : null}
+    </Box>
+  );
+}
+
+function MediaListItem({
+  item,
+  selected,
+}: {
+  item: MediaSearchResult;
+  selected: boolean;
+}) {
+  return (
+    <Box flexDirection="column" marginBottom={1}>
+      <Text
+        backgroundColor={selected ? "cyan" : undefined}
+        color={selected ? "black" : undefined}
+        bold={selected}
+      >
+        {`${selected ? " 当前 " : "  "}${item.title}`}
+      </Text>
+      <Text dimColor>{`${selected ? "  " : "    "}${item.ownerName}  ·  ${formatDuration(item.durationSeconds ?? 0)}  ·  ${formatCount(item.viewCount)}`}</Text>
+    </Box>
+  );
+}
+
+function FieldGroup({title, children}: {title: string; children: React.ReactNode}) {
+  return (
+    <Box flexDirection="column">
+      <Text dimColor>{`[ ${title} ]`}</Text>
+      {children}
     </Box>
   );
 }
@@ -1247,7 +1277,7 @@ function FormField({
   value: string;
   selected: boolean;
 }) {
-  return <Text color={selected ? "yellow" : undefined}>{`${selected ? ">" : " "} ${label}  ${value}`}</Text>;
+  return <Text color={selected ? "yellow" : undefined}>{`${selected ? ">" : " "} ${label}：${value}`}</Text>;
 }
 
 function CompactConnectorRow({
@@ -1261,10 +1291,16 @@ function CompactConnectorRow({
     <Box>
       {items.map((item, index) => {
         const active = item.id === activeId;
-        const label = active ? `[${item.label}]` : item.status === "planned" ? `${item.label}·规划中` : item.label;
+        const label = active ? ` ${item.label} ` : item.status === "planned" ? `${item.label}·规划中` : item.label;
         return (
           <React.Fragment key={item.id}>
-            <Text color={active ? "yellow" : item.status === "planned" ? "gray" : undefined}>{label}</Text>
+            <Text
+              backgroundColor={active ? "cyan" : undefined}
+              color={active ? "black" : item.status === "planned" ? "gray" : undefined}
+              bold={active}
+            >
+              {label}
+            </Text>
             {index < items.length - 1 ? <Text>  </Text> : null}
           </React.Fragment>
         );
