@@ -128,7 +128,7 @@ print_success() {
   printf '\n现在可以运行：\n  %s\n' "$bbcli_command"
 
   if ! command -v mpv >/dev/null 2>&1; then
-    printf '\n终端内播放需要 mpv，但当前机器还没有安装。\n' >&2
+    printf '\n终端内播放需要 mpv，但当前机器还没有安装，或者自动安装没有成功。\n' >&2
 
     if [ "$(uname -s)" = "Darwin" ] && command -v brew >/dev/null 2>&1; then
       printf '可以这样安装：\n  brew install mpv ffmpeg\n' >&2
@@ -137,6 +137,8 @@ print_success() {
     fi
 
     printf 'BBCLI 默认会停留在终端模式，不会自动弹出单独的 ffplay 窗口。\n' >&2
+  else
+    printf '\n已检测到 mpv，可以直接测试终端内播放。\n' >&2
   fi
 }
 

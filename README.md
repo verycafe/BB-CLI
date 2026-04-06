@@ -35,6 +35,17 @@
 npm install -g https://github.com/verycafe/BB-CLI/archive/main.tar.gz
 ```
 
+在支持的系统上，安装过程会自动检测并尝试安装 `mpv`：
+
+- macOS：`Homebrew`
+- Linux：`apt-get / dnf / pacman / zypper`
+
+如果你不希望安装时自动处理 `mpv`，可以显式跳过：
+
+```bash
+BBCLI_SKIP_MPV_INSTALL=1 npm install -g https://github.com/verycafe/BB-CLI/archive/main.tar.gz
+```
+
 如果你只想临时试一下，不保留全局安装：
 
 ```bash
@@ -45,6 +56,12 @@ npm exec --yes github:verycafe/BB-CLI -- providers
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/verycafe/BB-CLI/main/install.sh | bash
+```
+
+同样也支持跳过自动安装 `mpv`：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/verycafe/BB-CLI/main/install.sh | BBCLI_SKIP_MPV_INSTALL=1 bash
 ```
 
 如果要安装指定版本或指定标签：
@@ -227,6 +244,7 @@ bbcli providers bilibili
 - `kitty` 和 `sixel` 需要你的终端支持对应图形协议。
 - `tct` 是不支持图形协议时的 Unicode 回退模式。
 - 一键安装脚本支持 `BBCLI_INSTALL_MODE=auto|release|archive`、`BBCLI_INSTALL_REF` 和 `BBCLI_PREFIX`。
+- 包安装阶段会自动尝试补齐 `mpv`；如果你不想这样做，可以设置 `BBCLI_SKIP_MPV_INSTALL=1`。
 - 这个项目当前更推荐 GitHub 压缩包安装，而不是 `github:owner/repo` 形式的 git 安装。
 - 当前账号层是平台无关的，本质上是在存命名的请求头组合，由各个平台自己决定如何使用。
 - 目前内置媒体平台只有哔哩哔哩，但账号层已经能先存其他平台的身份信息。

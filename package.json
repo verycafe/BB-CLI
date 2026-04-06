@@ -32,6 +32,7 @@
     "start": "node dist/cli.js",
     "inspect": "tsx src/cli.tsx --inspect",
     "prepare": "node scripts/prepare.mjs",
+    "postinstall": "node dist/postinstall.js",
     "typecheck": "tsc --noEmit"
   },
   "files": [
