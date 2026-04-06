@@ -1,7 +1,7 @@
 {
   "name": "@verycafe/bb-cli",
   "version": "0.1.0",
-  "description": "A terminal-first media CLI with provider-aware accounts and Bilibili playback support.",
+  "description": "一个以终端为主入口、支持平台账号与哔哩哔哩播放的内容 CLI。",
   "license": "MIT",
   "type": "module",
   "bin": {

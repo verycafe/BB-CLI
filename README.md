@@ -1,108 +1,147 @@
 # BBCLI
 
-`BBCLI` is a `Node + Ink` terminal client for public and account-backed media workflows.
+`BBCLI` 是一个基于 `Node + Ink` 的终端内容工具箱。
 
-It currently does these things:
+它现在的核心方向不是“记一堆命令参数”，而是：
 
-- opens an interactive `bbcli` home screen with a branded header and workspace shell
-- lands on `Discover` by default instead of forcing site-specific subcommands
-- shows Bilibili homepage recommendations in `Discover`
-- searches Bilibili videos from inside the `Search` workspace
-- reserves a first-class `Library` workspace for future reading and local-file flows
-- keeps `Accounts` as a unified connection surface for future providers
-- opens selected videos and extracts `window.__playinfo__` and `window.__INITIAL_STATE__`
-- launches playback through `mpv` terminal video outputs with the priority `kitty -> sixel -> tct`
-- binds provider-scoped accounts from the same Ink launcher or through CLI commands
+- 直接运行 `bbcli`，进入带品牌头图的首页启动器
+- 先看一级菜单，再进入二级工作区
+- 以“发现 / 搜索 / 书库 / 账号”作为统一交互骨架
+- 先把哔哩哔哩跑顺，同时为后续接入微信读书、YouTube、Instagram、Google、本地文件等能力留出结构位
 
-## Requirements
+## 当前能力
+
+- 启动后显示带兔子头图和 Logo 的交互首页
+- 默认从“发现”进入，而不是强迫用户先记站点子命令
+- 在“发现”里查看哔哩哔哩首页推荐视频
+- 在“搜索”里搜索哔哩哔哩视频，或直接粘贴链接打开
+- 为未来的阅读、本地文件和收藏内容预留“书库”
+- 用统一的“账号”工作区管理各个平台身份
+- 抓取视频页里的 `window.__playinfo__` 和 `window.__INITIAL_STATE__`
+- 优先通过 `mpv` 的终端输出模式播放：`kitty -> sixel -> tct`
+- 在 Ink 交互界面里直接绑定平台账号，也支持命令行绑定
+
+## 环境要求
 
 - Node 20+
-- `mpv` for terminal-native playback
-- `ffplay` is optional and used only as a fallback when `mpv` is unavailable
+- `mpv`，如果你希望在终端里直接播放视频
+- `ffplay` 可选，只会在你明确允许外部播放器时作为回退方案
 
-## Install
+## 安装
 
-Recommended global install from the GitHub tarball today:
+当前最推荐的安装方式是直接通过 GitHub 压缩包走 `npm`：
 
 ```bash
 npm install -g https://github.com/verycafe/BB-CLI/archive/main.tar.gz
 ```
 
-Run it once without keeping a global install:
+如果你只想临时试一下，不保留全局安装：
 
 ```bash
 npm exec --yes github:verycafe/BB-CLI -- providers
 ```
 
-One-line installer:
+一键安装脚本：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/verycafe/BB-CLI/main/install.sh | bash
 ```
 
-Pin a specific ref with the installer:
+如果要安装指定版本或指定标签：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/verycafe/BB-CLI/main/install.sh | BBCLI_INSTALL_REF=v0.1.0 bash
 ```
 
-Install from a GitHub Release asset when a tagged release publishes the packed `.tgz` file:
+如果未来某个 GitHub Release 附带了 `.tgz` 安装包，也可以直接这样装：
 
 ```bash
 npm install -g https://github.com/verycafe/BB-CLI/releases/download/v0.1.0/verycafe-bb-cli-0.1.0.tgz
 ```
 
-The installer above prefers the latest Release asset automatically and falls back to the main-branch GitHub tarball when no installable Release package is attached yet.
+安装脚本会优先尝试最新的 GitHub Release 安装包；如果还没有可安装资产，就自动回退到 `main` 分支压缩包。
 
-Local development install:
+本地开发安装：
 
 ```bash
 npm install
 ```
 
-## Run
+## 启动
+
+最主要的使用方式现在就是：
 
 ```bash
-npm run dev
 bbcli
 ```
 
-Or build first:
+本地开发时可以这样跑：
+
+```bash
+npm run dev
+```
+
+或者先构建再启动：
 
 ```bash
 npm run build
 npm start --
 ```
 
-The primary flow is now:
+## 首页交互
 
-```bash
-bbcli
-```
+启动 `bbcli` 后，你会先进入一级菜单，而不是直接掉进某个站点列表页。
 
-From there you can:
+当前首页结构：
 
-- browse `Discover`
-- type to jump straight into `Search`
-- press `3` to inspect the future `Library` shelf
-- press `4` to open the unified `Accounts` workspace
-- press `Enter` on a selected result to open it
+- `发现`
+- `搜索`
+- `书库`
+- `账号`
 
-Each workspace now shows its connector lane directly in the Ink UI:
+一级菜单操作：
 
-- `Discover` shows live and planned feed connectors
-- `Search` shows live and planned search connectors
-- `Library` shows the long-term reading and saved-content sources
-- `Accounts` shows bindable providers first, with planned connectors below them
+- `← / →`：切换顶部菜单
+- `Enter`：进入当前二级界面
+- 直接输入文字：从首页直接跳进“搜索”
 
-The top-level workspaces are:
+## 二级界面交互
 
-- `Discover`: recommendation feeds and future connected provider timelines
-- `Search`: cross-provider search lane, currently wired to Bilibili
-- `Library`: future home for WeRead, local EPUB/PDF/text files, saved sessions, and reading progress
-- `Accounts`: provider connection and credential management
+### 发现
 
-## Useful flags
+- 查看哔哩哔哩首页推荐
+- `↑ / ↓` 选择视频
+- `Enter` 打开当前视频
+- `r` 刷新推荐流
+- `b` 返回首页
+
+### 搜索
+
+- 直接输入关键词
+- 也可以粘贴哔哩哔哩视频链接
+- 回车后会先尝试识别链接；如果不是链接，就执行搜索
+- `↑ / ↓` 选择搜索结果
+- `Enter` 打开当前结果
+- `Esc` 返回首页
+
+### 书库
+
+- 当前先作为长期内容入口
+- 未来会接微信读书、本地 EPUB / PDF、已保存内容、阅读进度等
+- `Esc` 或 `b` 返回首页
+
+### 账号
+
+- 当前已支持哔哩哔哩账号绑定
+- 后续会继续接微信读书、YouTube、Instagram、Google 等平台
+- `[` / `]`：切换平台
+- `Tab`：切换表单字段
+- `Enter`：保存绑定
+- `Esc` 返回首页
+
+## 常用命令
+
+虽然主路径已经是 `bbcli` 首页，但命令行入口仍然保留，方便脚本和快速调试：
 
 ```bash
 bbcli
@@ -115,49 +154,49 @@ bbcli BV17PYqerEtA --account=main
 bbcli BV17PYqerEtA --provider=bilibili
 ```
 
-## Account binding
+## 账号绑定
 
-Accounts are stored per provider and per name in a local config file:
+账号按“平台 + 名称”存储在本地：
 
 ```bash
 ~/.config/bbcli/accounts.json
 ```
 
-The easiest path is now inside the launcher:
+最推荐的绑定方式是直接在启动器里完成：
 
 ```bash
 bbcli
 ```
 
-Then press `4` and fill in:
+进入“账号”后填写：
 
-- account name
-- Cookie text or cookie file path
-- optional note
+- 账号名
+- Cookie 文本或 Cookie 文件路径
+- 可选备注
 
-Inside `Accounts`, use `left/right` or `[` and `]` to switch between live bindable providers when more than one is available.
+如果平台多起来了，可以在“账号”页用 `[` 和 `]` 切换不同平台。
 
-You can still bind accounts from the command line too.
+当然，也可以继续走命令行方式：
 
-Bind a Bilibili account from an existing cookie string:
+从已有 Cookie 文本绑定一个哔哩哔哩账号：
 
 ```bash
 bbcli account bind bilibili --name main --cookie 'SESSDATA=...; bili_jct=...'
 ```
 
-If you do not want the cookie in shell history:
+如果你不想把 Cookie 留在 shell 历史里：
 
 ```bash
 pbpaste | bbcli account bind bilibili --name main --cookie-stdin --default
 ```
 
-You can also import a raw Cookie string or a Netscape cookie jar from a file:
+从文件导入原始 Cookie 文本或 Netscape 格式的 Cookie 文件：
 
 ```bash
 bbcli account bind bilibili --name main --cookie-file ./bilibili.cookies
 ```
 
-List and inspect accounts:
+查看和检查账号：
 
 ```bash
 bbcli account list
@@ -168,27 +207,27 @@ bbcli account use bilibili main
 bbcli account remove bilibili main
 ```
 
-For future providers, the same account layer can store any auth headers:
+这套账号层是通用的，所以未来别的平台也能直接复用：
 
 ```bash
 bbcli account bind github --name work --header 'Authorization: Bearer ghp_xxx'
 ```
 
-Inspect the currently known provider integrations:
+查看当前内置平台：
 
 ```bash
 bbcli providers
 bbcli providers bilibili
 ```
 
-## Notes
+## 说明
 
-- Bilibili stream URLs are signed and expire, so the CLI resolves them fresh from the page each run.
-- `bbcli` now treats recommendations and search as the main Bilibili entry path. BV ids and direct URLs still work, but they are no longer the only practical way in.
-- `kitty` and `sixel` need a terminal that supports those graphics protocols.
-- `tct` is the Unicode fallback when no graphics protocol is detected.
-- The one-line installer understands `BBCLI_INSTALL_MODE=auto|release|archive`, `BBCLI_INSTALL_REF`, and `BBCLI_PREFIX`.
-- Prefer GitHub tarball installs over `github:owner/repo` git installs for global usage. In this project, tarball installs have been more reliable in real npm tests.
-- The current account layer is provider-agnostic. It stores named header bundles and lets each provider decide how to use them.
-- Right now Bilibili is the only built-in media provider. Other provider ids can already be stored in the account layer and wired into media support later.
-- `account check` performs local provider-aware validation by default. With `--remote`, providers can also run a live login probe. For Bilibili this uses [`x/web-interface/nav`](https://api.bilibili.com/x/web-interface/nav) to check whether the stored cookies still represent a logged-in session.
+- 哔哩哔哩的码流链接是带签名、会过期的，所以每次运行都会重新解析页面。
+- 现在 `bbcli` 的主入口已经是“推荐 + 搜索”，`BV` 和直链仍然可用，但不再是唯一入口。
+- `kitty` 和 `sixel` 需要你的终端支持对应图形协议。
+- `tct` 是不支持图形协议时的 Unicode 回退模式。
+- 一键安装脚本支持 `BBCLI_INSTALL_MODE=auto|release|archive`、`BBCLI_INSTALL_REF` 和 `BBCLI_PREFIX`。
+- 这个项目当前更推荐 GitHub 压缩包安装，而不是 `github:owner/repo` 形式的 git 安装。
+- 当前账号层是平台无关的，本质上是在存命名的请求头组合，由各个平台自己决定如何使用。
+- 目前内置媒体平台只有哔哩哔哩，但账号层已经能先存其他平台的身份信息。
+- `account check` 默认做本地校验；加上 `--remote` 后，会在支持的平台上做远程登录探针。对哔哩哔哩来说，这会调用 [`x/web-interface/nav`](https://api.bilibili.com/x/web-interface/nav) 检查 Cookie 是否仍然代表已登录账号。

@@ -27,7 +27,7 @@ const cli = meow(
     --provider    为媒体或账号命令指定平台名
     --name        为账号命令指定账号名
     --cookie      将原始 Cookie 请求头绑定到账号
-    --cookie-file 从文件导入 Cookie 文本或 Netscape cookie jar
+    --cookie-file 从文件导入 Cookie 文本或 Netscape 格式的 Cookie 文件
     --cookie-stdin 从标准输入读取 Cookie
     --remote      在支持时执行平台远程登录探测
     --token       将 Bearer Token 绑定到账号
