@@ -1,7 +1,8 @@
 import {readFile} from "node:fs/promises";
+import {basename} from "node:path";
 
 import React, {startTransition, useEffect, useState} from "react";
-import {Box, Newline, Text, useApp, useInput, useStdin, type Key} from "ink";
+import {Box, Newline, Text, useApp, useInput, useStdin, useStdout, type Key} from "ink";
 
 import {
   bindAccount,
@@ -33,6 +34,12 @@ import {
   LIBRARY_CONNECTORS,
   type WorkspaceConnector,
 } from "./lib/workspace-catalog.js";
+import {
+  listLocalBooks,
+  loadLocalBook,
+  type LocalBook,
+  type LocalBookDocument,
+} from "./lib/local-library.js";
 
 type Props = {
   target?: MediaTarget;
@@ -49,6 +56,7 @@ type AppState =
   | {status: "loading"}
   | {status: "ready"; session: VideoSession; support: PlayerSupport; selectedIndex: number; account?: RequestAccount; lastPlan?: LaunchPlan; message?: string}
   | {status: "playing"; session: VideoSession; support: PlayerSupport; selectedIndex: number; account?: RequestAccount; message: string}
+  | {status: "reader"; document: LocalBookDocument; wrappedLines: string[]; contentWidth: number; topLine: number; message?: string}
   | {status: "error"; error: string};
 
 type HomeTab = "discover" | "search" | "library" | "accounts";
@@ -77,6 +85,14 @@ type SearchState = {
   lastRunQuery?: string;
   results: MediaSearchResult[];
   selectedIndex: number;
+  message?: string;
+};
+
+type LibraryState = {
+  loading: boolean;
+  books: LocalBook[];
+  selectedIndex: number;
+  roots: string[];
   message?: string;
 };
 
@@ -206,9 +222,9 @@ const HOME_TABS: Array<{
     summary: "阅读、本地文件与收藏内容。",
     items: [
       {
-        id: "library-home",
-        label: "进入书库",
-        note: "查看书库来源和未来的阅读入口。",
+        id: "library-local-books",
+        label: "本地书架",
+        note: "扫描当前目录、Books、文稿和下载目录里的书籍。",
         status: "live",
         action: {
           type: "open-workspace",
@@ -226,13 +242,13 @@ const HOME_TABS: Array<{
         },
       },
       {
-        id: "library-local-books",
-        label: "本地 EPUB / PDF",
-        note: "后续会接本地阅读和续读位置。",
+        id: "library-saved-media",
+        label: "已保存内容",
+        note: "后续会接稍后再看、剪藏和离线媒体。",
         status: "planned",
         action: {
           type: "planned",
-          message: "本地 EPUB / PDF 阅读还在规划中。",
+          message: "已保存内容还在规划中，当前先把本地书架做好。",
         },
       },
     ],
@@ -263,13 +279,13 @@ const HOME_TABS: Array<{
         },
       },
       {
-        id: "accounts-youtube-instagram",
-        label: "YouTube / Instagram",
-        note: "后续会接创作者、订阅和媒体账号。",
+        id: "accounts-youtube",
+        label: "YouTube 账号",
+        note: "后续会接订阅、播放列表和创作者身份。",
         status: "planned",
         action: {
           type: "planned",
-          message: "YouTube / Instagram 账号接入还在规划中。",
+          message: "YouTube 账号接入还在规划中。",
         },
       },
     ],
@@ -292,7 +308,8 @@ const EMPTY_ACCOUNT_FORM: AccountFormState = {
 
 export default function App({target, inspectOnly, preferredVo, useFastProfile, allowExternalPlayer, selectedAccountName, providerOverride}: Props) {
   const {exit} = useApp();
-  const {isRawModeSupported} = useStdin();
+  const {isRawModeSupported, setRawMode} = useStdin();
+  const {stdout} = useStdout();
   const providerDescriptors = listKnownProviders();
   const accountProviderOptions = providerDescriptors.filter((provider) => provider.supportsAccounts);
   const accountProviderIdsKey = accountProviderOptions.map((provider) => provider.id).join(",");
@@ -304,6 +321,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
   const [reloadKey, setReloadKey] = useState(0);
   const [homeDataKey, setHomeDataKey] = useState(0);
   const [recommendationKey, setRecommendationKey] = useState(0);
+  const [libraryKey, setLibraryKey] = useState(0);
   const [activeTarget, setActiveTarget] = useState<MediaTarget | undefined>(target);
   const [launchInspectOnly, setLaunchInspectOnly] = useState(inspectOnly);
   const [launchVo, setLaunchVo] = useState<PlayerVo>(preferredVo);
@@ -327,8 +345,18 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
     results: [],
     selectedIndex: 0,
   });
+  const [library, setLibrary] = useState<LibraryState>({
+    loading: false,
+    books: [],
+    selectedIndex: 0,
+    roots: [],
+  });
   const [accountForm, setAccountForm] = useState<AccountFormState>(EMPTY_ACCOUNT_FORM);
   const [state, setState] = useState<AppState>(() => (target ? {status: "loading"} : {status: "home"}));
+  const [terminalSize, setTerminalSize] = useState(() => ({
+    columns: stdout.columns ?? 100,
+    rows: stdout.rows ?? 32,
+  }));
   const homeAccountProviderId = selectedAccountProviderId;
   const homeAccountProvider = providerDescriptors.find((provider) => provider.id === homeAccountProviderId);
 
@@ -344,6 +372,21 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
 
     setSelectedAccountProviderId(defaultAccountProvider?.id ?? homeMediaProviderId);
   }, [accountProviderIdsKey, defaultAccountProvider?.id, homeMediaProviderId, providerOverride, selectedAccountProviderId]);
+
+  useEffect(() => {
+    function handleResize(): void {
+      setTerminalSize({
+        columns: stdout.columns ?? 100,
+        rows: stdout.rows ?? 32,
+      });
+    }
+
+    handleResize();
+    stdout.on("resize", handleResize);
+    return () => {
+      stdout.off("resize", handleResize);
+    };
+  }, [stdout]);
 
   useEffect(() => {
     setHomeMenuItemIndex((current) => {
@@ -460,6 +503,59 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
   }, [homeMediaProviderId, recommendationKey, selectedAccountName]);
 
   useEffect(() => {
+    if (homeView !== "workspace" || homeTab !== "library") {
+      return;
+    }
+
+    let cancelled = false;
+
+    startTransition(() => {
+      setLibrary((current) => ({
+        ...current,
+        loading: true,
+        message: current.books.length > 0 ? "正在刷新本地书架..." : "正在扫描本地书架...",
+      }));
+    });
+
+    void (async () => {
+      const snapshot = await listLocalBooks();
+
+      if (cancelled) {
+        return;
+      }
+
+      startTransition(() => {
+        setLibrary((current) => ({
+          loading: false,
+          books: snapshot.books,
+          roots: snapshot.roots,
+          selectedIndex: Math.min(current.selectedIndex, Math.max(0, snapshot.books.length - 1)),
+          message: snapshot.books.length === 0
+            ? "还没有找到本地书籍。可以把 EPUB、PDF、TXT、Markdown、HTML、DOCX 放到当前目录、Books、文稿、下载或桌面。"
+            : `已找到 ${snapshot.books.length} 本本地书，回车即可开始阅读。`,
+        }));
+      });
+    })().catch((error) => {
+      if (cancelled) {
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : String(error);
+      startTransition(() => {
+        setLibrary((current) => ({
+          ...current,
+          loading: false,
+          message,
+        }));
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [homeTab, homeView, libraryKey]);
+
+  useEffect(() => {
     if (!activeTarget) {
       return;
     }
@@ -505,9 +601,37 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
     };
   }, [activeTarget, launchInspectOnly, launchVo, reloadKey, selectedAccountName]);
 
+  useEffect(() => {
+    const nextContentWidth = getReaderContentWidth(terminalSize.columns);
+
+    setState((current) => {
+      if (current.status !== "reader" || current.contentWidth === nextContentWidth) {
+        return current;
+      }
+
+      const progress = current.wrappedLines.length > 1
+        ? current.topLine / Math.max(1, current.wrappedLines.length - 1)
+        : 0;
+      const wrappedLines = wrapReaderText(current.document.text, nextContentWidth);
+      const maxTopLine = Math.max(0, wrappedLines.length - getReaderPageSize(terminalSize.rows));
+
+      return {
+        ...current,
+        contentWidth: nextContentWidth,
+        wrappedLines,
+        topLine: clamp(Math.round(progress * maxTopLine), 0, maxTopLine),
+      };
+    });
+  }, [terminalSize.columns, terminalSize.rows]);
+
   function handleAppInput(inputKey: string, key: Key): void {
     if (state.status === "home") {
       handleHomeInput(inputKey, key);
+      return;
+    }
+
+    if (state.status === "reader") {
+      handleReaderInput(inputKey, key);
       return;
     }
 
@@ -598,42 +722,51 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
         return;
       }
 
+      const currentSession = state.session;
+      const currentSupport = state.support;
+      const currentSelectedIndex = state.selectedIndex;
+      const currentAccount = state.account;
+
       setState({
         status: "playing",
-        session: state.session,
-        support: state.support,
-        selectedIndex: state.selectedIndex,
-        account: state.account,
+        session: currentSession,
+        support: currentSupport,
+        selectedIndex: currentSelectedIndex,
+        account: currentAccount,
         message: plan.player === "mpv"
-          ? `正在使用 ${launchVo === "auto" ? state.support.preferredVo : launchVo} 输出模式启动 mpv...`
+          ? `正在使用 ${launchVo === "auto" ? currentSupport.preferredVo : launchVo} 输出模式启动 mpv...`
           : "正在以单独窗口启动 ffplay...",
       });
 
-      process.stdout.write("\x1Bc");
-
       void (async () => {
         try {
+          setRawMode(false);
+          await pause(30);
           const code = await launchPlayer(plan);
+          process.stdout.write("\x1Bc");
           setState({
             status: "ready",
-            session: state.session,
-            support: state.support,
-            selectedIndex: state.selectedIndex,
-            account: state.account,
+            session: currentSession,
+            support: currentSupport,
+            selectedIndex: currentSelectedIndex,
+            account: currentAccount,
             lastPlan: plan,
-            message: `${plan.player} 已退出，退出码为 ${code}。按 b 返回上一页。`,
+            message: `${plan.player} 已退出，退出码为 ${code}。你现在已经回到 BBCLI；按 b 可返回上一层列表。`,
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
+          process.stdout.write("\x1Bc");
           setState({
             status: "ready",
-            session: state.session,
-            support: state.support,
-            selectedIndex: state.selectedIndex,
-            account: state.account,
+            session: currentSession,
+            support: currentSupport,
+            selectedIndex: currentSelectedIndex,
+            account: currentAccount,
             lastPlan: plan,
             message: `播放器启动失败：${message}`,
           });
+        } finally {
+          setRawMode(true);
         }
       })();
     }
@@ -695,9 +828,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
     }
 
     if (homeTab === "library") {
-      if (inputKey === "r") {
-        setRecommendationKey((value) => value + 1);
-      }
+      handleLibraryInput(inputKey, key);
       return;
     }
 
@@ -806,7 +937,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
     if (key.downArrow || inputKey === "j") {
       setRecommendations((current) => ({
         ...current,
-        selectedIndex: Math.min(current.items.length - 1, current.selectedIndex + 1),
+        selectedIndex: Math.min(Math.max(0, current.items.length - 1), current.selectedIndex + 1),
       }));
       return;
     }
@@ -836,7 +967,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
     if (key.downArrow || inputKey === "j") {
       setSearch((current) => ({
         ...current,
-        selectedIndex: Math.min(current.results.length - 1, current.selectedIndex + 1),
+        selectedIndex: Math.min(Math.max(0, current.results.length - 1), current.selectedIndex + 1),
       }));
       return;
     }
@@ -916,6 +1047,48 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
         query: current.query + inputKey.replace(/[\r\n]+/g, ""),
         message: undefined,
       }));
+    }
+  }
+
+  function handleLibraryInput(inputKey: string, key: Key): void {
+    if (key.escape) {
+      setHomeView("menu");
+      return;
+    }
+
+    if (library.loading) {
+      if (inputKey === "r") {
+        setLibraryKey((value) => value + 1);
+      }
+      return;
+    }
+
+    if (key.upArrow || inputKey === "k") {
+      setLibrary((current) => ({
+        ...current,
+        selectedIndex: Math.max(0, current.selectedIndex - 1),
+      }));
+      return;
+    }
+
+    if (key.downArrow || inputKey === "j") {
+      setLibrary((current) => ({
+        ...current,
+        selectedIndex: Math.min(Math.max(0, current.books.length - 1), current.selectedIndex + 1),
+      }));
+      return;
+    }
+
+    if (inputKey === "r") {
+      setLibraryKey((value) => value + 1);
+      return;
+    }
+
+    if (key.return) {
+      const book = library.books[library.selectedIndex];
+      if (book) {
+        void openLocalBookInReader(book);
+      }
     }
   }
 
@@ -1002,6 +1175,67 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
 
     if (isPlainTextInput(inputKey, key)) {
       setAccountForm((current) => updateAccountField(current, current.activeField, getAccountFieldValue(current, current.activeField) + inputKey.replace(/[\r\n]+/g, "")));
+    }
+  }
+
+  function handleReaderInput(inputKey: string, key: Key): void {
+    if (state.status !== "reader") {
+      return;
+    }
+
+    const pageSize = getReaderPageSize(terminalSize.rows);
+    const maxTopLine = Math.max(0, state.wrappedLines.length - pageSize);
+
+    if (inputKey === "q" || key.escape || inputKey === "b") {
+      returnToHome("library");
+      return;
+    }
+
+    if (key.upArrow || inputKey === "k") {
+      setState({
+        ...state,
+        topLine: clamp(state.topLine - 1, 0, maxTopLine),
+      });
+      return;
+    }
+
+    if (key.downArrow || inputKey === "j") {
+      setState({
+        ...state,
+        topLine: clamp(state.topLine + 1, 0, maxTopLine),
+      });
+      return;
+    }
+
+    if (key.pageUp || inputKey === "u") {
+      setState({
+        ...state,
+        topLine: clamp(state.topLine - pageSize, 0, maxTopLine),
+      });
+      return;
+    }
+
+    if (key.pageDown || inputKey === " " || inputKey === "f") {
+      setState({
+        ...state,
+        topLine: clamp(state.topLine + pageSize, 0, maxTopLine),
+      });
+      return;
+    }
+
+    if (key.home || inputKey === "g") {
+      setState({
+        ...state,
+        topLine: 0,
+      });
+      return;
+    }
+
+    if (key.end || inputKey === "G") {
+      setState({
+        ...state,
+        topLine: maxTopLine,
+      });
     }
   }
 
@@ -1124,6 +1358,40 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
     }
   }
 
+  async function openLocalBookInReader(book: LocalBook): Promise<void> {
+    setLibrary((current) => ({
+      ...current,
+      loading: true,
+      message: `正在打开《${book.title}》...`,
+    }));
+
+    try {
+      const document = await loadLocalBook(book);
+      const contentWidth = getReaderContentWidth(terminalSize.columns);
+      const wrappedLines = wrapReaderText(document.text, contentWidth);
+      setState({
+        status: "reader",
+        document,
+        wrappedLines,
+        contentWidth,
+        topLine: 0,
+        message: `${book.formatLabel} 读取完成。按 Esc 返回书库。`,
+      });
+      setLibrary((current) => ({
+        ...current,
+        loading: false,
+        message: `正在阅读《${book.title}》。`,
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setLibrary((current) => ({
+        ...current,
+        loading: false,
+        message,
+      }));
+    }
+  }
+
   function openTargetFromInput(input: string): void {
     const target = resolveMediaTarget(input, providerOverride);
     openTarget(target);
@@ -1159,6 +1427,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
           providers={providerSummaries}
           recommendations={recommendations}
           search={search}
+          library={library}
           accountForm={accountForm}
           accountProviderId={homeAccountProviderId}
           accountProviderLabel={homeAccountProvider?.label ?? homeAccountProviderId}
@@ -1178,12 +1447,18 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, a
 
   if (state.status === "playing") {
     return (
+      <Box flexDirection="column">
+        <Text color="green">{state.message}</Text>
+        <Text dimColor>播放器现在直接接管键盘。用 mpv 自己的按键暂停、继续和退出；退出后会回到 BBCLI。</Text>
+      </Box>
+    );
+  }
+
+  if (state.status === "reader") {
+    return (
       <>
         {isRawModeSupported ? <InputController onInput={handleAppInput} /> : null}
-        <Box flexDirection="column">
-          <Text color="green">{state.message}</Text>
-          <Text dimColor>播放器退出后会回到这里。</Text>
-        </Box>
+        <ReaderScreen state={state} columns={terminalSize.columns} rows={terminalSize.rows} />
       </>
     );
   }
@@ -1222,6 +1497,7 @@ function HomeScreen({
   providers,
   recommendations,
   search,
+  library,
   accountForm,
   accountProviderId,
   accountProviderLabel,
@@ -1237,6 +1513,7 @@ function HomeScreen({
   providers: HomeProviderSummary[];
   recommendations: RecommendationState;
   search: SearchState;
+  library: LibraryState;
   accountForm: AccountFormState;
   accountProviderId: string;
   accountProviderLabel: string;
@@ -1265,7 +1542,7 @@ function HomeScreen({
       {view === "workspace" ? <Newline /> : null}
       {view === "workspace" && tab === "discover" ? <RecommendationPanel state={recommendations} /> : null}
       {view === "workspace" && tab === "search" ? <SearchPanel state={search} /> : null}
-      {view === "workspace" && tab === "library" ? <LibraryPanel providers={providers} /> : null}
+      {view === "workspace" && tab === "library" ? <LibraryPanel state={library} providers={providers} /> : null}
       {view === "workspace" && tab === "accounts" ? <AccountPanel state={accountForm} providerLabel={accountProviderLabel} accountProviderId={accountProviderId} providers={providers} /> : null}
 
       <Newline />
@@ -1273,7 +1550,7 @@ function HomeScreen({
       {isInteractive && view === "menu" ? <Text dimColor>{`${activeMenu?.label ?? "菜单"}  ·  ← → 切分类  ·  ↑↓ 选入口  ·  Enter 进入  ·  直接输入可搜索`}</Text> : null}
       {isInteractive && view === "workspace" && tab === "discover" ? <Text dimColor>↑↓ 选视频  ·  Enter 打开  ·  r 刷新  ·  b 返回</Text> : null}
       {isInteractive && view === "workspace" && tab === "search" ? <Text dimColor>输入后回车  ·  ↑↓ 选结果  ·  Esc 返回</Text> : null}
-      {isInteractive && view === "workspace" && tab === "library" ? <Text dimColor>Esc 或 b 返回</Text> : null}
+      {isInteractive && view === "workspace" && tab === "library" ? <Text dimColor>↑↓ 选书  ·  Enter 阅读  ·  r 刷新  ·  Esc 返回</Text> : null}
       {isInteractive && view === "workspace" && tab === "accounts" ? <Text dimColor>{'[ ] 平台  ·  ↑↓ / Tab 字段  ·  m 模式  ·  d 默认  ·  Enter 保存  ·  Esc 返回'}</Text> : null}
     </Box>
   );
@@ -1400,6 +1677,41 @@ function BrandHeader({
   );
 }
 
+function ReaderScreen({
+  state,
+  columns,
+  rows,
+}: {
+  state: Extract<AppState, {status: "reader"}>;
+  columns: number;
+  rows: number;
+}) {
+  const pageSize = getReaderPageSize(rows);
+  const maxTopLine = Math.max(0, state.wrappedLines.length - pageSize);
+  const startLine = clamp(state.topLine, 0, maxTopLine);
+  const visibleLines = state.wrappedLines.slice(startLine, startLine + pageSize);
+  const contentPadding = " ".repeat(Math.max(2, Math.floor((columns - state.contentWidth) / 2)));
+  const progress = state.wrappedLines.length > 0
+    ? Math.round(((startLine + visibleLines.length) / state.wrappedLines.length) * 100)
+    : 0;
+
+  return (
+    <Box flexDirection="column">
+      <Text color="cyan">书库 / 阅读器</Text>
+      <Text bold>{state.document.book.title}</Text>
+      <Text dimColor>{`${state.document.book.formatLabel}  ·  ${basename(state.document.book.path)}  ·  进度 ${progress}%`}</Text>
+      <Text dimColor>{truncatePath(state.document.book.path, Math.max(40, columns - 8))}</Text>
+      <Text dimColor>{"-".repeat(Math.max(32, Math.min(columns - 2, state.contentWidth + 4)))}</Text>
+      {visibleLines.map((line, index) => (
+        <Text key={`${startLine}-${index}`}>{`${contentPadding}${line}`}</Text>
+      ))}
+      <Text dimColor>{"-".repeat(Math.max(32, Math.min(columns - 2, state.contentWidth + 4)))}</Text>
+      <Text dimColor>↑↓ 微调  ·  空格 / PgDn 下页  ·  u / PgUp 上页  ·  g / G 首尾  ·  Esc 返回书库</Text>
+      {state.message ? <Text color="yellow">{state.message}</Text> : null}
+    </Box>
+  );
+}
+
 function RecommendationPanel({state}: {state: RecommendationState}) {
   return (
     <Box flexDirection="column">
@@ -1430,17 +1742,46 @@ function SearchPanel({state}: {state: SearchState}) {
   );
 }
 
-function LibraryPanel({providers}: {providers: HomeProviderSummary[]}) {
+function LibraryPanel({
+  state,
+  providers,
+}: {
+  state: LibraryState;
+  providers: HomeProviderSummary[];
+}) {
   const connected = providers.filter((provider) => provider.boundAccounts > 0);
+  const rootLabels = state.roots.map((root) => root.split(" · ")[0] ?? root);
+  const currentDirectory = state.roots
+    .find((root) => root.startsWith("当前目录 · "))
+    ?.replace("当前目录 · ", "");
 
   return (
     <Box flexDirection="column">
-      <CompactConnectorRow items={LIBRARY_CONNECTORS} />
+      <CompactConnectorRow items={LIBRARY_CONNECTORS} activeId="local-books" />
+      <Text dimColor>{state.roots.length > 0 ? `扫描位置：${rootLabels.join(" / ")}` : "正在准备本地书架..."}</Text>
+      {currentDirectory ? <Text dimColor>{`当前目录：${truncatePath(currentDirectory, 72)}`}</Text> : null}
       <Newline />
-      <Text dimColor>当前连接</Text>
+      {state.loading ? <Text dimColor>正在整理你的本地书架...</Text> : null}
+      {!state.loading && state.books.length === 0 ? <Text dimColor>{state.message ?? "暂时没有找到可阅读的本地书。"}</Text> : null}
+      {!state.loading && state.books.length > 0 ? (
+        <>
+          {state.books.slice(0, 10).map((book, index) => (
+            <BookListItem key={book.id} book={book} selected={index === state.selectedIndex} />
+          ))}
+          <Text dimColor>{`当前已展示 ${Math.min(10, state.books.length)} / ${state.books.length} 本。`}</Text>
+        </>
+      ) : null}
+      {state.message && state.books.length > 0 ? (
+        <>
+          <Newline />
+          <Text color="yellow">{state.message}</Text>
+        </>
+      ) : null}
+      <Newline />
+      <Text dimColor>已连接账号</Text>
       {connected.length > 0 ? connected.map((provider) => (
         <Text key={provider.id}>{`${provider.label}  |  账号 ${provider.boundAccounts}${provider.defaultAccount ? `  |  默认 ${provider.defaultAccount}` : ""}`}</Text>
-      )) : <Text dimColor>目前还没有连接任何书库来源，可以先去“账号”工作区绑定平台。</Text>}
+      )) : <Text dimColor>书库阅读不依赖账号；如果后续需要同步书架，再去“账号”里绑定平台。</Text>}
     </Box>
   );
 }
@@ -1557,6 +1898,28 @@ function MediaListItem({
         {`${selected ? " 当前 " : "  "}${item.title}`}
       </Text>
       <Text dimColor>{`${selected ? "  " : "    "}${item.ownerName}  ·  ${formatDuration(item.durationSeconds ?? 0)}  ·  ${formatCount(item.viewCount)}`}</Text>
+    </Box>
+  );
+}
+
+function BookListItem({
+  book,
+  selected,
+}: {
+  book: LocalBook;
+  selected: boolean;
+}) {
+  return (
+    <Box flexDirection="column" marginBottom={1}>
+      <Text
+        backgroundColor={selected ? "cyan" : undefined}
+        color={selected ? "black" : undefined}
+        bold={selected}
+      >
+        {`${selected ? " 当前 " : "  "}${book.title}`}
+      </Text>
+      <Text dimColor>{`${selected ? "  " : "    "}${book.formatLabel}  ·  ${book.sourceLabel}  ·  ${formatFileSize(book.sizeBytes)}  ·  ${formatDate(book.modifiedAt)}`}</Text>
+      <Text dimColor>{`${selected ? "  " : "    "}${truncatePath(book.path, 72)}`}</Text>
     </Box>
   );
 }
@@ -1957,4 +2320,159 @@ function nextVo(value: PlayerVo): PlayerVo {
   }
 
   return "auto";
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatDate(value: string): string {
+  try {
+    return new Intl.DateTimeFormat("zh-CN", {
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+
+function truncatePath(filePath: string, limit: number): string {
+  if (filePath.length <= limit) {
+    return filePath;
+  }
+
+  const fileName = basename(filePath);
+  const head = Math.max(10, limit - fileName.length - 4);
+  return `${filePath.slice(0, head)}.../${fileName}`;
+}
+
+function getReaderContentWidth(columns: number): number {
+  return clamp(Math.min(86, columns - 10), 32, 86);
+}
+
+function getReaderPageSize(rows: number): number {
+  return Math.max(8, rows - 9);
+}
+
+function wrapReaderText(text: string, width: number): string[] {
+  const paragraphs = text.split(/\n{2,}/);
+  const lines: string[] = [];
+
+  for (const paragraph of paragraphs) {
+    const normalized = paragraph.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+
+    if (!normalized) {
+      lines.push("");
+      continue;
+    }
+
+    lines.push(...wrapParagraph(normalized, width));
+    lines.push("");
+  }
+
+  while (lines.length > 0 && lines[lines.length - 1] === "") {
+    lines.pop();
+  }
+
+  return lines.length > 0 ? lines : ["没有可显示的正文。"];
+}
+
+function wrapParagraph(text: string, width: number): string[] {
+  const segments = segmentReadableText(text);
+  const lines: string[] = [];
+  let currentLine = "";
+  let currentWidth = 0;
+
+  for (const segment of segments) {
+    const printableSegment = segment === "\t" ? "    " : segment;
+    const segmentWidth = measureDisplayWidth(printableSegment);
+
+    if (segmentWidth > width) {
+      const pieces = splitSegmentByWidth(printableSegment, width);
+      for (const piece of pieces) {
+        if (currentLine) {
+          lines.push(currentLine.trimEnd());
+          currentLine = "";
+          currentWidth = 0;
+        }
+        lines.push(piece.trimEnd());
+      }
+      continue;
+    }
+
+    if (currentWidth + segmentWidth > width && currentLine.trim().length > 0) {
+      lines.push(currentLine.trimEnd());
+      currentLine = printableSegment.trimStart();
+      currentWidth = measureDisplayWidth(currentLine);
+      continue;
+    }
+
+    currentLine += printableSegment;
+    currentWidth += segmentWidth;
+  }
+
+  if (currentLine.trim().length > 0) {
+    lines.push(currentLine.trimEnd());
+  }
+
+  return lines.length > 0 ? lines : [text];
+}
+
+function segmentReadableText(text: string): string[] {
+  const segmenter = new Intl.Segmenter("zh-CN", {granularity: "word"});
+  return [...segmenter.segment(text)].map((entry) => entry.segment);
+}
+
+function splitSegmentByWidth(text: string, width: number): string[] {
+  const pieces: string[] = [];
+  let current = "";
+  let currentWidth = 0;
+
+  for (const character of text) {
+    const charWidth = measureDisplayWidth(character);
+    if (currentWidth + charWidth > width && current) {
+      pieces.push(current);
+      current = character;
+      currentWidth = charWidth;
+      continue;
+    }
+
+    current += character;
+    currentWidth += charWidth;
+  }
+
+  if (current) {
+    pieces.push(current);
+  }
+
+  return pieces;
+}
+
+function measureDisplayWidth(text: string): number {
+  let width = 0;
+  for (const character of text) {
+    width += /[\u1100-\u115f\u2329\u232a\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe10-\ufe19\ufe30-\ufe6f\uff00-\uff60\uffe0-\uffe6]/u.test(character) ? 2 : 1;
+  }
+  return width;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function pause(durationMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, durationMs);
+  });
 }

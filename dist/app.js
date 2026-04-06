@@ -1,12 +1,14 @@
 import { jsx as _jsx, Fragment as _Fragment, jsxs as _jsxs } from "react/jsx-runtime";
 import { readFile } from "node:fs/promises";
+import { basename } from "node:path";
 import React, { startTransition, useEffect, useState } from "react";
-import { Box, Newline, Text, useApp, useInput, useStdin } from "ink";
+import { Box, Newline, Text, useApp, useInput, useStdin, useStdout } from "ink";
 import { bindAccount, buildHeadersFromAccount, listAccounts, resolveAccount, } from "./lib/accounts.js";
 import { parseCookieInput } from "./lib/cookies.js";
 import { listKnownProviders, listRecommendedMedia, loadMediaSession, resolveMediaTarget, searchMedia, validateProviderAccountHeaders, } from "./lib/providers.js";
 import { buildLaunchPlan, detectPlayerSupport, launchPlayer, } from "./lib/player.js";
 import { ACCOUNT_CONNECTORS, LIBRARY_CONNECTORS, } from "./lib/workspace-catalog.js";
+import { listLocalBooks, loadLocalBook, } from "./lib/local-library.js";
 const HOME_TABS = [
     {
         id: "discover",
@@ -90,9 +92,9 @@ const HOME_TABS = [
         summary: "阅读、本地文件与收藏内容。",
         items: [
             {
-                id: "library-home",
-                label: "进入书库",
-                note: "查看书库来源和未来的阅读入口。",
+                id: "library-local-books",
+                label: "本地书架",
+                note: "扫描当前目录、Books、文稿和下载目录里的书籍。",
                 status: "live",
                 action: {
                     type: "open-workspace",
@@ -110,13 +112,13 @@ const HOME_TABS = [
                 },
             },
             {
-                id: "library-local-books",
-                label: "本地 EPUB / PDF",
-                note: "后续会接本地阅读和续读位置。",
+                id: "library-saved-media",
+                label: "已保存内容",
+                note: "后续会接稍后再看、剪藏和离线媒体。",
                 status: "planned",
                 action: {
                     type: "planned",
-                    message: "本地 EPUB / PDF 阅读还在规划中。",
+                    message: "已保存内容还在规划中，当前先把本地书架做好。",
                 },
             },
         ],
@@ -147,13 +149,13 @@ const HOME_TABS = [
                 },
             },
             {
-                id: "accounts-youtube-instagram",
-                label: "YouTube / Instagram",
-                note: "后续会接创作者、订阅和媒体账号。",
+                id: "accounts-youtube",
+                label: "YouTube 账号",
+                note: "后续会接订阅、播放列表和创作者身份。",
                 status: "planned",
                 action: {
                     type: "planned",
-                    message: "YouTube / Instagram 账号接入还在规划中。",
+                    message: "YouTube 账号接入还在规划中。",
                 },
             },
         ],
@@ -174,7 +176,8 @@ const EMPTY_ACCOUNT_FORM = {
 };
 export default function App({ target, inspectOnly, preferredVo, useFastProfile, allowExternalPlayer, selectedAccountName, providerOverride }) {
     const { exit } = useApp();
-    const { isRawModeSupported } = useStdin();
+    const { isRawModeSupported, setRawMode } = useStdin();
+    const { stdout } = useStdout();
     const providerDescriptors = listKnownProviders();
     const accountProviderOptions = providerDescriptors.filter((provider) => provider.supportsAccounts);
     const accountProviderIdsKey = accountProviderOptions.map((provider) => provider.id).join(",");
@@ -185,6 +188,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
     const [reloadKey, setReloadKey] = useState(0);
     const [homeDataKey, setHomeDataKey] = useState(0);
     const [recommendationKey, setRecommendationKey] = useState(0);
+    const [libraryKey, setLibraryKey] = useState(0);
     const [activeTarget, setActiveTarget] = useState(target);
     const [launchInspectOnly, setLaunchInspectOnly] = useState(inspectOnly);
     const [launchVo, setLaunchVo] = useState(preferredVo);
@@ -206,8 +210,18 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
         results: [],
         selectedIndex: 0,
     });
+    const [library, setLibrary] = useState({
+        loading: false,
+        books: [],
+        selectedIndex: 0,
+        roots: [],
+    });
     const [accountForm, setAccountForm] = useState(EMPTY_ACCOUNT_FORM);
     const [state, setState] = useState(() => (target ? { status: "loading" } : { status: "home" }));
+    const [terminalSize, setTerminalSize] = useState(() => ({
+        columns: stdout.columns ?? 100,
+        rows: stdout.rows ?? 32,
+    }));
     const homeAccountProviderId = selectedAccountProviderId;
     const homeAccountProvider = providerDescriptors.find((provider) => provider.id === homeAccountProviderId);
     useEffect(() => {
@@ -220,6 +234,19 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
         }
         setSelectedAccountProviderId(defaultAccountProvider?.id ?? homeMediaProviderId);
     }, [accountProviderIdsKey, defaultAccountProvider?.id, homeMediaProviderId, providerOverride, selectedAccountProviderId]);
+    useEffect(() => {
+        function handleResize() {
+            setTerminalSize({
+                columns: stdout.columns ?? 100,
+                rows: stdout.rows ?? 32,
+            });
+        }
+        handleResize();
+        stdout.on("resize", handleResize);
+        return () => {
+            stdout.off("resize", handleResize);
+        };
+    }, [stdout]);
     useEffect(() => {
         setHomeMenuItemIndex((current) => {
             const itemCount = HOME_TABS[homeMenuIndex]?.items.length ?? 0;
@@ -318,6 +345,51 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
         };
     }, [homeMediaProviderId, recommendationKey, selectedAccountName]);
     useEffect(() => {
+        if (homeView !== "workspace" || homeTab !== "library") {
+            return;
+        }
+        let cancelled = false;
+        startTransition(() => {
+            setLibrary((current) => ({
+                ...current,
+                loading: true,
+                message: current.books.length > 0 ? "正在刷新本地书架..." : "正在扫描本地书架...",
+            }));
+        });
+        void (async () => {
+            const snapshot = await listLocalBooks();
+            if (cancelled) {
+                return;
+            }
+            startTransition(() => {
+                setLibrary((current) => ({
+                    loading: false,
+                    books: snapshot.books,
+                    roots: snapshot.roots,
+                    selectedIndex: Math.min(current.selectedIndex, Math.max(0, snapshot.books.length - 1)),
+                    message: snapshot.books.length === 0
+                        ? "还没有找到本地书籍。可以把 EPUB、PDF、TXT、Markdown、HTML、DOCX 放到当前目录、Books、文稿、下载或桌面。"
+                        : `已找到 ${snapshot.books.length} 本本地书，回车即可开始阅读。`,
+                }));
+            });
+        })().catch((error) => {
+            if (cancelled) {
+                return;
+            }
+            const message = error instanceof Error ? error.message : String(error);
+            startTransition(() => {
+                setLibrary((current) => ({
+                    ...current,
+                    loading: false,
+                    message,
+                }));
+            });
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [homeTab, homeView, libraryKey]);
+    useEffect(() => {
         if (!activeTarget) {
             return;
         }
@@ -357,9 +429,32 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
             cancelled = true;
         };
     }, [activeTarget, launchInspectOnly, launchVo, reloadKey, selectedAccountName]);
+    useEffect(() => {
+        const nextContentWidth = getReaderContentWidth(terminalSize.columns);
+        setState((current) => {
+            if (current.status !== "reader" || current.contentWidth === nextContentWidth) {
+                return current;
+            }
+            const progress = current.wrappedLines.length > 1
+                ? current.topLine / Math.max(1, current.wrappedLines.length - 1)
+                : 0;
+            const wrappedLines = wrapReaderText(current.document.text, nextContentWidth);
+            const maxTopLine = Math.max(0, wrappedLines.length - getReaderPageSize(terminalSize.rows));
+            return {
+                ...current,
+                contentWidth: nextContentWidth,
+                wrappedLines,
+                topLine: clamp(Math.round(progress * maxTopLine), 0, maxTopLine),
+            };
+        });
+    }, [terminalSize.columns, terminalSize.rows]);
     function handleAppInput(inputKey, key) {
         if (state.status === "home") {
             handleHomeInput(inputKey, key);
+            return;
+        }
+        if (state.status === "reader") {
+            handleReaderInput(inputKey, key);
             return;
         }
         if (state.status === "error") {
@@ -435,41 +530,51 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
                 });
                 return;
             }
+            const currentSession = state.session;
+            const currentSupport = state.support;
+            const currentSelectedIndex = state.selectedIndex;
+            const currentAccount = state.account;
             setState({
                 status: "playing",
-                session: state.session,
-                support: state.support,
-                selectedIndex: state.selectedIndex,
-                account: state.account,
+                session: currentSession,
+                support: currentSupport,
+                selectedIndex: currentSelectedIndex,
+                account: currentAccount,
                 message: plan.player === "mpv"
-                    ? `正在使用 ${launchVo === "auto" ? state.support.preferredVo : launchVo} 输出模式启动 mpv...`
+                    ? `正在使用 ${launchVo === "auto" ? currentSupport.preferredVo : launchVo} 输出模式启动 mpv...`
                     : "正在以单独窗口启动 ffplay...",
             });
-            process.stdout.write("\x1Bc");
             void (async () => {
                 try {
+                    setRawMode(false);
+                    await pause(30);
                     const code = await launchPlayer(plan);
+                    process.stdout.write("\x1Bc");
                     setState({
                         status: "ready",
-                        session: state.session,
-                        support: state.support,
-                        selectedIndex: state.selectedIndex,
-                        account: state.account,
+                        session: currentSession,
+                        support: currentSupport,
+                        selectedIndex: currentSelectedIndex,
+                        account: currentAccount,
                         lastPlan: plan,
-                        message: `${plan.player} 已退出，退出码为 ${code}。按 b 返回上一页。`,
+                        message: `${plan.player} 已退出，退出码为 ${code}。你现在已经回到 BBCLI；按 b 可返回上一层列表。`,
                     });
                 }
                 catch (error) {
                     const message = error instanceof Error ? error.message : String(error);
+                    process.stdout.write("\x1Bc");
                     setState({
                         status: "ready",
-                        session: state.session,
-                        support: state.support,
-                        selectedIndex: state.selectedIndex,
-                        account: state.account,
+                        session: currentSession,
+                        support: currentSupport,
+                        selectedIndex: currentSelectedIndex,
+                        account: currentAccount,
                         lastPlan: plan,
                         message: `播放器启动失败：${message}`,
                     });
+                }
+                finally {
+                    setRawMode(true);
                 }
             })();
         }
@@ -521,9 +626,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
             return;
         }
         if (homeTab === "library") {
-            if (inputKey === "r") {
-                setRecommendationKey((value) => value + 1);
-            }
+            handleLibraryInput(inputKey, key);
             return;
         }
         handleAccountInput(inputKey, key);
@@ -617,7 +720,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
         if (key.downArrow || inputKey === "j") {
             setRecommendations((current) => ({
                 ...current,
-                selectedIndex: Math.min(current.items.length - 1, current.selectedIndex + 1),
+                selectedIndex: Math.min(Math.max(0, current.items.length - 1), current.selectedIndex + 1),
             }));
             return;
         }
@@ -643,7 +746,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
         if (key.downArrow || inputKey === "j") {
             setSearch((current) => ({
                 ...current,
-                selectedIndex: Math.min(current.results.length - 1, current.selectedIndex + 1),
+                selectedIndex: Math.min(Math.max(0, current.results.length - 1), current.selectedIndex + 1),
             }));
             return;
         }
@@ -715,6 +818,42 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
                 query: current.query + inputKey.replace(/[\r\n]+/g, ""),
                 message: undefined,
             }));
+        }
+    }
+    function handleLibraryInput(inputKey, key) {
+        if (key.escape) {
+            setHomeView("menu");
+            return;
+        }
+        if (library.loading) {
+            if (inputKey === "r") {
+                setLibraryKey((value) => value + 1);
+            }
+            return;
+        }
+        if (key.upArrow || inputKey === "k") {
+            setLibrary((current) => ({
+                ...current,
+                selectedIndex: Math.max(0, current.selectedIndex - 1),
+            }));
+            return;
+        }
+        if (key.downArrow || inputKey === "j") {
+            setLibrary((current) => ({
+                ...current,
+                selectedIndex: Math.min(Math.max(0, current.books.length - 1), current.selectedIndex + 1),
+            }));
+            return;
+        }
+        if (inputKey === "r") {
+            setLibraryKey((value) => value + 1);
+            return;
+        }
+        if (key.return) {
+            const book = library.books[library.selectedIndex];
+            if (book) {
+                void openLocalBookInReader(book);
+            }
         }
     }
     function handleAccountInput(inputKey, key) {
@@ -789,6 +928,58 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
         }
         if (isPlainTextInput(inputKey, key)) {
             setAccountForm((current) => updateAccountField(current, current.activeField, getAccountFieldValue(current, current.activeField) + inputKey.replace(/[\r\n]+/g, "")));
+        }
+    }
+    function handleReaderInput(inputKey, key) {
+        if (state.status !== "reader") {
+            return;
+        }
+        const pageSize = getReaderPageSize(terminalSize.rows);
+        const maxTopLine = Math.max(0, state.wrappedLines.length - pageSize);
+        if (inputKey === "q" || key.escape || inputKey === "b") {
+            returnToHome("library");
+            return;
+        }
+        if (key.upArrow || inputKey === "k") {
+            setState({
+                ...state,
+                topLine: clamp(state.topLine - 1, 0, maxTopLine),
+            });
+            return;
+        }
+        if (key.downArrow || inputKey === "j") {
+            setState({
+                ...state,
+                topLine: clamp(state.topLine + 1, 0, maxTopLine),
+            });
+            return;
+        }
+        if (key.pageUp || inputKey === "u") {
+            setState({
+                ...state,
+                topLine: clamp(state.topLine - pageSize, 0, maxTopLine),
+            });
+            return;
+        }
+        if (key.pageDown || inputKey === " " || inputKey === "f") {
+            setState({
+                ...state,
+                topLine: clamp(state.topLine + pageSize, 0, maxTopLine),
+            });
+            return;
+        }
+        if (key.home || inputKey === "g") {
+            setState({
+                ...state,
+                topLine: 0,
+            });
+            return;
+        }
+        if (key.end || inputKey === "G") {
+            setState({
+                ...state,
+                topLine: maxTopLine,
+            });
         }
     }
     function cycleAccountProvider(direction) {
@@ -898,6 +1089,39 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
             }));
         }
     }
+    async function openLocalBookInReader(book) {
+        setLibrary((current) => ({
+            ...current,
+            loading: true,
+            message: `正在打开《${book.title}》...`,
+        }));
+        try {
+            const document = await loadLocalBook(book);
+            const contentWidth = getReaderContentWidth(terminalSize.columns);
+            const wrappedLines = wrapReaderText(document.text, contentWidth);
+            setState({
+                status: "reader",
+                document,
+                wrappedLines,
+                contentWidth,
+                topLine: 0,
+                message: `${book.formatLabel} 读取完成。按 Esc 返回书库。`,
+            });
+            setLibrary((current) => ({
+                ...current,
+                loading: false,
+                message: `正在阅读《${book.title}》。`,
+            }));
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            setLibrary((current) => ({
+                ...current,
+                loading: false,
+                message,
+            }));
+        }
+    }
     function openTargetFromInput(input) {
         const target = resolveMediaTarget(input, providerOverride);
         openTarget(target);
@@ -916,7 +1140,7 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
         }
     }
     if (state.status === "home") {
-        return (_jsxs(_Fragment, { children: [isRawModeSupported ? _jsx(InputController, { onInput: handleAppInput }) : null, _jsx(HomeScreen, { view: homeView, tab: homeTab, menuIndex: homeMenuIndex, menuItemIndex: homeMenuItemIndex, menuMessage: homeMenuMessage, providerLabel: homeMediaProvider?.label ?? homeMediaProviderId, inspectOnly: launchInspectOnly, providers: providerSummaries, recommendations: recommendations, search: search, accountForm: accountForm, accountProviderId: homeAccountProviderId, accountProviderLabel: homeAccountProvider?.label ?? homeAccountProviderId, isInteractive: isRawModeSupported })] }));
+        return (_jsxs(_Fragment, { children: [isRawModeSupported ? _jsx(InputController, { onInput: handleAppInput }) : null, _jsx(HomeScreen, { view: homeView, tab: homeTab, menuIndex: homeMenuIndex, menuItemIndex: homeMenuItemIndex, menuMessage: homeMenuMessage, providerLabel: homeMediaProvider?.label ?? homeMediaProviderId, inspectOnly: launchInspectOnly, providers: providerSummaries, recommendations: recommendations, search: search, library: library, accountForm: accountForm, accountProviderId: homeAccountProviderId, accountProviderLabel: homeAccountProvider?.label ?? homeAccountProviderId, isInteractive: isRawModeSupported })] }));
     }
     if (state.status === "loading") {
         return _jsx(LoadingScreen, { target: activeTarget });
@@ -925,7 +1149,10 @@ export default function App({ target, inspectOnly, preferredVo, useFastProfile, 
         return _jsx(ErrorScreen, { error: state.error });
     }
     if (state.status === "playing") {
-        return (_jsxs(_Fragment, { children: [isRawModeSupported ? _jsx(InputController, { onInput: handleAppInput }) : null, _jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { color: "green", children: state.message }), _jsx(Text, { dimColor: true, children: "\u64AD\u653E\u5668\u9000\u51FA\u540E\u4F1A\u56DE\u5230\u8FD9\u91CC\u3002" })] })] }));
+        return (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { color: "green", children: state.message }), _jsx(Text, { dimColor: true, children: "\u64AD\u653E\u5668\u73B0\u5728\u76F4\u63A5\u63A5\u7BA1\u952E\u76D8\u3002\u7528 mpv \u81EA\u5DF1\u7684\u6309\u952E\u6682\u505C\u3001\u7EE7\u7EED\u548C\u9000\u51FA\uFF1B\u9000\u51FA\u540E\u4F1A\u56DE\u5230 BBCLI\u3002" })] }));
+    }
+    if (state.status === "reader") {
+        return (_jsxs(_Fragment, { children: [isRawModeSupported ? _jsx(InputController, { onInput: handleAppInput }) : null, _jsx(ReaderScreen, { state: state, columns: terminalSize.columns, rows: terminalSize.rows })] }));
     }
     return (_jsxs(_Fragment, { children: [isRawModeSupported ? _jsx(InputController, { onInput: handleAppInput }) : null, _jsx(Dashboard, { session: state.session, support: state.support, selectedIndex: state.selectedIndex, inspectOnly: launchInspectOnly, allowExternalPlayer: allowExternalPlayer, target: activeTarget, account: state.account, message: state.message, lastPlan: state.lastPlan })] }));
 }
@@ -933,7 +1160,7 @@ function InputController({ onInput }) {
     useInput(onInput);
     return null;
 }
-function HomeScreen({ view, tab, menuIndex, menuItemIndex, menuMessage, providerLabel, inspectOnly, providers, recommendations, search, accountForm, accountProviderId, accountProviderLabel, isInteractive, }) {
+function HomeScreen({ view, tab, menuIndex, menuItemIndex, menuMessage, providerLabel, inspectOnly, providers, recommendations, search, library, accountForm, accountProviderId, accountProviderLabel, isInteractive, }) {
     const activeLaneLabel = view === "menu"
         ? "首页菜单"
         : tab === "accounts"
@@ -942,7 +1169,7 @@ function HomeScreen({ view, tab, menuIndex, menuItemIndex, menuMessage, provider
                 ? "个人书架"
                 : providerLabel;
     const activeMenu = HOME_TABS[menuIndex];
-    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(BrandHeader, { activeTab: view === "menu" ? undefined : tab, providerLabel: activeLaneLabel, inspectOnly: view === "workspace" ? inspectOnly : false }), _jsx(Newline, {}), view === "menu" ? _jsx(MenuScreen, { selectedIndex: menuIndex, selectedItemIndex: menuItemIndex, message: menuMessage }) : null, view === "workspace" ? _jsx(WorkspaceHeader, { tab: tab, providerLabel: activeLaneLabel }) : null, view === "workspace" ? _jsx(Newline, {}) : null, view === "workspace" && tab === "discover" ? _jsx(RecommendationPanel, { state: recommendations }) : null, view === "workspace" && tab === "search" ? _jsx(SearchPanel, { state: search }) : null, view === "workspace" && tab === "library" ? _jsx(LibraryPanel, { providers: providers }) : null, view === "workspace" && tab === "accounts" ? _jsx(AccountPanel, { state: accountForm, providerLabel: accountProviderLabel, accountProviderId: accountProviderId, providers: providers }) : null, _jsx(Newline, {}), !isInteractive ? _jsx(Text, { dimColor: true, children: "\u5F53\u524D\u7EC8\u7AEF\u4E0D\u652F\u6301\u4EA4\u4E92\u8F93\u5165\uFF0C\u8BF7\u5728\u6B63\u5E38\u7EC8\u7AEF\u91CC\u8FD0\u884C BBCLI\u3002" }) : null, isInteractive && view === "menu" ? _jsx(Text, { dimColor: true, children: `${activeMenu?.label ?? "菜单"}  ·  ← → 切分类  ·  ↑↓ 选入口  ·  Enter 进入  ·  直接输入可搜索` }) : null, isInteractive && view === "workspace" && tab === "discover" ? _jsx(Text, { dimColor: true, children: "\u2191\u2193 \u9009\u89C6\u9891  \u00B7  Enter \u6253\u5F00  \u00B7  r \u5237\u65B0  \u00B7  b \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "search" ? _jsx(Text, { dimColor: true, children: "\u8F93\u5165\u540E\u56DE\u8F66  \u00B7  \u2191\u2193 \u9009\u7ED3\u679C  \u00B7  Esc \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "library" ? _jsx(Text, { dimColor: true, children: "Esc \u6216 b \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "accounts" ? _jsx(Text, { dimColor: true, children: '[ ] 平台  ·  ↑↓ / Tab 字段  ·  m 模式  ·  d 默认  ·  Enter 保存  ·  Esc 返回' }) : null] }));
+    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(BrandHeader, { activeTab: view === "menu" ? undefined : tab, providerLabel: activeLaneLabel, inspectOnly: view === "workspace" ? inspectOnly : false }), _jsx(Newline, {}), view === "menu" ? _jsx(MenuScreen, { selectedIndex: menuIndex, selectedItemIndex: menuItemIndex, message: menuMessage }) : null, view === "workspace" ? _jsx(WorkspaceHeader, { tab: tab, providerLabel: activeLaneLabel }) : null, view === "workspace" ? _jsx(Newline, {}) : null, view === "workspace" && tab === "discover" ? _jsx(RecommendationPanel, { state: recommendations }) : null, view === "workspace" && tab === "search" ? _jsx(SearchPanel, { state: search }) : null, view === "workspace" && tab === "library" ? _jsx(LibraryPanel, { state: library, providers: providers }) : null, view === "workspace" && tab === "accounts" ? _jsx(AccountPanel, { state: accountForm, providerLabel: accountProviderLabel, accountProviderId: accountProviderId, providers: providers }) : null, _jsx(Newline, {}), !isInteractive ? _jsx(Text, { dimColor: true, children: "\u5F53\u524D\u7EC8\u7AEF\u4E0D\u652F\u6301\u4EA4\u4E92\u8F93\u5165\uFF0C\u8BF7\u5728\u6B63\u5E38\u7EC8\u7AEF\u91CC\u8FD0\u884C BBCLI\u3002" }) : null, isInteractive && view === "menu" ? _jsx(Text, { dimColor: true, children: `${activeMenu?.label ?? "菜单"}  ·  ← → 切分类  ·  ↑↓ 选入口  ·  Enter 进入  ·  直接输入可搜索` }) : null, isInteractive && view === "workspace" && tab === "discover" ? _jsx(Text, { dimColor: true, children: "\u2191\u2193 \u9009\u89C6\u9891  \u00B7  Enter \u6253\u5F00  \u00B7  r \u5237\u65B0  \u00B7  b \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "search" ? _jsx(Text, { dimColor: true, children: "\u8F93\u5165\u540E\u56DE\u8F66  \u00B7  \u2191\u2193 \u9009\u7ED3\u679C  \u00B7  Esc \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "library" ? _jsx(Text, { dimColor: true, children: "\u2191\u2193 \u9009\u4E66  \u00B7  Enter \u9605\u8BFB  \u00B7  r \u5237\u65B0  \u00B7  Esc \u8FD4\u56DE" }) : null, isInteractive && view === "workspace" && tab === "accounts" ? _jsx(Text, { dimColor: true, children: '[ ] 平台  ·  ↑↓ / Tab 字段  ·  m 模式  ·  d 默认  ·  Enter 保存  ·  Esc 返回' }) : null] }));
 }
 function MenuScreen({ selectedIndex, selectedItemIndex, message, }) {
     const activeItem = HOME_TABS[selectedIndex];
@@ -966,6 +1193,17 @@ function BrandHeader({ activeTab, providerLabel, inspectOnly, }) {
     ];
     return (_jsxs(Box, { flexDirection: "column", children: [_jsxs(Box, { children: [_jsx(Box, { flexDirection: "column", marginRight: 2, children: mascotLines.map((line) => (_jsx(Text, { color: "yellow", children: line }, line))) }), _jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { color: "cyan", bold: true, children: "BBCLI" }), _jsx(Text, { bold: true, children: "\u7EC8\u7AEF\u91CC\u7684\u5185\u5BB9\u5154\u5154\u5DE5\u5177\u7BB1" }), _jsx(Text, { dimColor: true, children: activeTab ? `页面：${formatHomeTab(activeTab)}  ·  通道：${providerLabel}  ·  模式：${inspectOnly ? "检查" : "播放"}` : "选择一个入口开始。" })] })] }), _jsx(Text, { dimColor: true, children: "-".repeat(78) })] }));
 }
+function ReaderScreen({ state, columns, rows, }) {
+    const pageSize = getReaderPageSize(rows);
+    const maxTopLine = Math.max(0, state.wrappedLines.length - pageSize);
+    const startLine = clamp(state.topLine, 0, maxTopLine);
+    const visibleLines = state.wrappedLines.slice(startLine, startLine + pageSize);
+    const contentPadding = " ".repeat(Math.max(2, Math.floor((columns - state.contentWidth) / 2)));
+    const progress = state.wrappedLines.length > 0
+        ? Math.round(((startLine + visibleLines.length) / state.wrappedLines.length) * 100)
+        : 0;
+    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { color: "cyan", children: "\u4E66\u5E93 / \u9605\u8BFB\u5668" }), _jsx(Text, { bold: true, children: state.document.book.title }), _jsx(Text, { dimColor: true, children: `${state.document.book.formatLabel}  ·  ${basename(state.document.book.path)}  ·  进度 ${progress}%` }), _jsx(Text, { dimColor: true, children: truncatePath(state.document.book.path, Math.max(40, columns - 8)) }), _jsx(Text, { dimColor: true, children: "-".repeat(Math.max(32, Math.min(columns - 2, state.contentWidth + 4))) }), visibleLines.map((line, index) => (_jsx(Text, { children: `${contentPadding}${line}` }, `${startLine}-${index}`))), _jsx(Text, { dimColor: true, children: "-".repeat(Math.max(32, Math.min(columns - 2, state.contentWidth + 4))) }), _jsx(Text, { dimColor: true, children: "\u2191\u2193 \u5FAE\u8C03  \u00B7  \u7A7A\u683C / PgDn \u4E0B\u9875  \u00B7  u / PgUp \u4E0A\u9875  \u00B7  g / G \u9996\u5C3E  \u00B7  Esc \u8FD4\u56DE\u4E66\u5E93" }), state.message ? _jsx(Text, { color: "yellow", children: state.message }) : null] }));
+}
 function RecommendationPanel({ state }) {
     return (_jsxs(Box, { flexDirection: "column", children: [!state.loading && state.items.length > 0 ? _jsx(Text, { dimColor: true, children: `共 ${state.items.length} 条推荐` }) : null, !state.loading && state.items.length > 0 ? _jsx(Newline, {}) : null, state.loading ? _jsx(Text, { dimColor: true, children: "\u6B63\u5728\u52A0\u8F7D\u9996\u9875\u63A8\u8350..." }) : null, !state.loading && state.items.length === 0 ? _jsx(Text, { dimColor: true, children: state.message ?? "当前还没有推荐内容。" }) : null, state.items.slice(0, 8).map((item, index) => {
                 return _jsx(MediaListItem, { item: item, selected: index === state.selectedIndex }, `${item.pageUrl}-${index}`);
@@ -976,9 +1214,13 @@ function SearchPanel({ state }) {
                 return _jsx(MediaListItem, { item: item, selected: index === state.selectedIndex }, `${item.pageUrl}-${index}`);
             })] }));
 }
-function LibraryPanel({ providers }) {
+function LibraryPanel({ state, providers, }) {
     const connected = providers.filter((provider) => provider.boundAccounts > 0);
-    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(CompactConnectorRow, { items: LIBRARY_CONNECTORS }), _jsx(Newline, {}), _jsx(Text, { dimColor: true, children: "\u5F53\u524D\u8FDE\u63A5" }), connected.length > 0 ? connected.map((provider) => (_jsx(Text, { children: `${provider.label}  |  账号 ${provider.boundAccounts}${provider.defaultAccount ? `  |  默认 ${provider.defaultAccount}` : ""}` }, provider.id))) : _jsx(Text, { dimColor: true, children: "\u76EE\u524D\u8FD8\u6CA1\u6709\u8FDE\u63A5\u4EFB\u4F55\u4E66\u5E93\u6765\u6E90\uFF0C\u53EF\u4EE5\u5148\u53BB\u201C\u8D26\u53F7\u201D\u5DE5\u4F5C\u533A\u7ED1\u5B9A\u5E73\u53F0\u3002" })] }));
+    const rootLabels = state.roots.map((root) => root.split(" · ")[0] ?? root);
+    const currentDirectory = state.roots
+        .find((root) => root.startsWith("当前目录 · "))
+        ?.replace("当前目录 · ", "");
+    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(CompactConnectorRow, { items: LIBRARY_CONNECTORS, activeId: "local-books" }), _jsx(Text, { dimColor: true, children: state.roots.length > 0 ? `扫描位置：${rootLabels.join(" / ")}` : "正在准备本地书架..." }), currentDirectory ? _jsx(Text, { dimColor: true, children: `当前目录：${truncatePath(currentDirectory, 72)}` }) : null, _jsx(Newline, {}), state.loading ? _jsx(Text, { dimColor: true, children: "\u6B63\u5728\u6574\u7406\u4F60\u7684\u672C\u5730\u4E66\u67B6..." }) : null, !state.loading && state.books.length === 0 ? _jsx(Text, { dimColor: true, children: state.message ?? "暂时没有找到可阅读的本地书。" }) : null, !state.loading && state.books.length > 0 ? (_jsxs(_Fragment, { children: [state.books.slice(0, 10).map((book, index) => (_jsx(BookListItem, { book: book, selected: index === state.selectedIndex }, book.id))), _jsx(Text, { dimColor: true, children: `当前已展示 ${Math.min(10, state.books.length)} / ${state.books.length} 本。` })] })) : null, state.message && state.books.length > 0 ? (_jsxs(_Fragment, { children: [_jsx(Newline, {}), _jsx(Text, { color: "yellow", children: state.message })] })) : null, _jsx(Newline, {}), _jsx(Text, { dimColor: true, children: "\u5DF2\u8FDE\u63A5\u8D26\u53F7" }), connected.length > 0 ? connected.map((provider) => (_jsx(Text, { children: `${provider.label}  |  账号 ${provider.boundAccounts}${provider.defaultAccount ? `  |  默认 ${provider.defaultAccount}` : ""}` }, provider.id))) : _jsx(Text, { dimColor: true, children: "\u4E66\u5E93\u9605\u8BFB\u4E0D\u4F9D\u8D56\u8D26\u53F7\uFF1B\u5982\u679C\u540E\u7EED\u9700\u8981\u540C\u6B65\u4E66\u67B6\uFF0C\u518D\u53BB\u201C\u8D26\u53F7\u201D\u91CC\u7ED1\u5B9A\u5E73\u53F0\u3002" })] }));
 }
 function AccountPanel({ state, providerLabel, accountProviderId, providers, }) {
     const liveConnectors = providers
@@ -999,6 +1241,9 @@ function AccountPanel({ state, providerLabel, accountProviderId, providers, }) {
 }
 function MediaListItem({ item, selected, }) {
     return (_jsxs(Box, { flexDirection: "column", marginBottom: 1, children: [_jsx(Text, { backgroundColor: selected ? "cyan" : undefined, color: selected ? "black" : undefined, bold: selected, children: `${selected ? " 当前 " : "  "}${item.title}` }), _jsx(Text, { dimColor: true, children: `${selected ? "  " : "    "}${item.ownerName}  ·  ${formatDuration(item.durationSeconds ?? 0)}  ·  ${formatCount(item.viewCount)}` })] }));
+}
+function BookListItem({ book, selected, }) {
+    return (_jsxs(Box, { flexDirection: "column", marginBottom: 1, children: [_jsx(Text, { backgroundColor: selected ? "cyan" : undefined, color: selected ? "black" : undefined, bold: selected, children: `${selected ? " 当前 " : "  "}${book.title}` }), _jsx(Text, { dimColor: true, children: `${selected ? "  " : "    "}${book.formatLabel}  ·  ${book.sourceLabel}  ·  ${formatFileSize(book.sizeBytes)}  ·  ${formatDate(book.modifiedAt)}` }), _jsx(Text, { dimColor: true, children: `${selected ? "  " : "    "}${truncatePath(book.path, 72)}` })] }));
 }
 function FieldGroup({ title, children }) {
     return (_jsxs(Box, { flexDirection: "column", borderStyle: "round", borderColor: "gray", paddingX: 1, children: [_jsx(Text, { dimColor: true, children: title }), _jsx(Newline, {}), children] }));
@@ -1171,4 +1416,130 @@ function nextVo(value) {
         return "tct";
     }
     return "auto";
+}
+function formatFileSize(bytes) {
+    if (bytes < 1024) {
+        return `${bytes} B`;
+    }
+    if (bytes < 1024 * 1024) {
+        return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+function formatDate(value) {
+    try {
+        return new Intl.DateTimeFormat("zh-CN", {
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+        }).format(new Date(value));
+    }
+    catch {
+        return value;
+    }
+}
+function truncatePath(filePath, limit) {
+    if (filePath.length <= limit) {
+        return filePath;
+    }
+    const fileName = basename(filePath);
+    const head = Math.max(10, limit - fileName.length - 4);
+    return `${filePath.slice(0, head)}.../${fileName}`;
+}
+function getReaderContentWidth(columns) {
+    return clamp(Math.min(86, columns - 10), 32, 86);
+}
+function getReaderPageSize(rows) {
+    return Math.max(8, rows - 9);
+}
+function wrapReaderText(text, width) {
+    const paragraphs = text.split(/\n{2,}/);
+    const lines = [];
+    for (const paragraph of paragraphs) {
+        const normalized = paragraph.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+        if (!normalized) {
+            lines.push("");
+            continue;
+        }
+        lines.push(...wrapParagraph(normalized, width));
+        lines.push("");
+    }
+    while (lines.length > 0 && lines[lines.length - 1] === "") {
+        lines.pop();
+    }
+    return lines.length > 0 ? lines : ["没有可显示的正文。"];
+}
+function wrapParagraph(text, width) {
+    const segments = segmentReadableText(text);
+    const lines = [];
+    let currentLine = "";
+    let currentWidth = 0;
+    for (const segment of segments) {
+        const printableSegment = segment === "\t" ? "    " : segment;
+        const segmentWidth = measureDisplayWidth(printableSegment);
+        if (segmentWidth > width) {
+            const pieces = splitSegmentByWidth(printableSegment, width);
+            for (const piece of pieces) {
+                if (currentLine) {
+                    lines.push(currentLine.trimEnd());
+                    currentLine = "";
+                    currentWidth = 0;
+                }
+                lines.push(piece.trimEnd());
+            }
+            continue;
+        }
+        if (currentWidth + segmentWidth > width && currentLine.trim().length > 0) {
+            lines.push(currentLine.trimEnd());
+            currentLine = printableSegment.trimStart();
+            currentWidth = measureDisplayWidth(currentLine);
+            continue;
+        }
+        currentLine += printableSegment;
+        currentWidth += segmentWidth;
+    }
+    if (currentLine.trim().length > 0) {
+        lines.push(currentLine.trimEnd());
+    }
+    return lines.length > 0 ? lines : [text];
+}
+function segmentReadableText(text) {
+    const segmenter = new Intl.Segmenter("zh-CN", { granularity: "word" });
+    return [...segmenter.segment(text)].map((entry) => entry.segment);
+}
+function splitSegmentByWidth(text, width) {
+    const pieces = [];
+    let current = "";
+    let currentWidth = 0;
+    for (const character of text) {
+        const charWidth = measureDisplayWidth(character);
+        if (currentWidth + charWidth > width && current) {
+            pieces.push(current);
+            current = character;
+            currentWidth = charWidth;
+            continue;
+        }
+        current += character;
+        currentWidth += charWidth;
+    }
+    if (current) {
+        pieces.push(current);
+    }
+    return pieces;
+}
+function measureDisplayWidth(text) {
+    let width = 0;
+    for (const character of text) {
+        width += /[\u1100-\u115f\u2329\u232a\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe10-\ufe19\ufe30-\ufe6f\uff00-\uff60\uffe0-\uffe6]/u.test(character) ? 2 : 1;
+    }
+    return width;
+}
+function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+}
+function pause(durationMs) {
+    return new Promise((resolve) => {
+        setTimeout(resolve, durationMs);
+    });
 }

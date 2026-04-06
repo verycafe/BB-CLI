@@ -54,8 +54,8 @@ export const LIBRARY_CONNECTORS = [
     {
         id: "local-books",
         label: "本地 EPUB/PDF",
-        status: "planned",
-        note: "终端阅读书架，用于本地图书、笔记和续读位置。",
+        status: "live",
+        note: "终端阅读书架，直接打开 EPUB、PDF、TXT、Markdown、HTML 和 DOCX。",
     },
     {
         id: "saved-media",
@@ -82,12 +82,6 @@ export const ACCOUNT_CONNECTORS = [
         label: "YouTube",
         status: "planned",
         note: "未来支持频道、订阅和保存播放列表的连接。",
-    },
-    {
-        id: "instagram",
-        label: "Instagram",
-        status: "planned",
-        note: "未来支持信息流、收藏帖子和创作者身份连接。",
     },
     {
         id: "google",
