@@ -18,28 +18,37 @@ It currently does three things:
 
 ## Install
 
-Install directly from this GitHub repository today:
+Recommended global install from this GitHub repository today:
 
 ```bash
 npm install -g github:verycafe/BB-CLI
 ```
 
-If you just want to try it without keeping a global install:
+Run it once without keeping a global install:
 
 ```bash
-npx github:verycafe/BB-CLI providers
+npm exec --yes github:verycafe/BB-CLI -- providers
 ```
 
-After the package is published to npm, the intended command is:
+One-line installer:
 
 ```bash
-npm install -g @verycafe/bb-cli
+curl -fsSL https://raw.githubusercontent.com/verycafe/BB-CLI/main/install.sh | bash
 ```
 
-Why not `bb-cli`?
+Pin a specific ref with the installer:
 
-- `bb-cli` is already taken on npm.
-- `@verycafe/bb-cli` is currently available and matches the repository owner.
+```bash
+curl -fsSL https://raw.githubusercontent.com/verycafe/BB-CLI/main/install.sh | BBCLI_INSTALL_REF=v0.1.0 bash
+```
+
+Install from a GitHub Release asset when a tagged release publishes the packed `.tgz` file:
+
+```bash
+npm install -g https://github.com/verycafe/BB-CLI/releases/download/v0.1.0/verycafe-bb-cli-0.1.0.tgz
+```
+
+The installer above prefers the latest Release asset automatically and falls back to `github:verycafe/BB-CLI` when no installable Release package is attached yet.
 
 Local development install:
 
@@ -128,6 +137,7 @@ bbcli providers bilibili
 - Bilibili stream URLs are signed and expire, so the CLI resolves them fresh from the page each run.
 - `kitty` and `sixel` need a terminal that supports those graphics protocols.
 - `tct` is the Unicode fallback when no graphics protocol is detected.
+- The one-line installer understands `BBCLI_INSTALL_MODE=auto|release|git`, `BBCLI_INSTALL_REF`, and `BBCLI_PREFIX`.
 - The current account layer is provider-agnostic. It stores named header bundles and lets each provider decide how to use them.
 - Right now Bilibili is the only built-in media provider. Other provider ids can already be stored in the account layer and wired into media support later.
 - `account check` performs local provider-aware validation by default. With `--remote`, providers can also run a live login probe. For Bilibili this uses [`x/web-interface/nav`](https://api.bilibili.com/x/web-interface/nav) to check whether the stored cookies still represent a logged-in session.
