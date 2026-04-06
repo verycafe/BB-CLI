@@ -29,6 +29,13 @@ import {
   type PlayerSupport,
   type PlayerVo,
 } from "./lib/player.js";
+import {
+  ACCOUNT_CONNECTORS,
+  DISCOVER_CONNECTORS,
+  LIBRARY_CONNECTORS,
+  SEARCH_CONNECTORS,
+  type WorkspaceConnector,
+} from "./lib/workspace-catalog.js";
 
 type Props = {
   target?: MediaTarget;
@@ -51,6 +58,7 @@ type HomeTab = "discover" | "search" | "library" | "accounts";
 type HomeProviderSummary = {
   id: string;
   label: string;
+  supportsAccounts: boolean;
   detectionHint: string;
   example?: string;
   boundAccounts: number;
@@ -106,12 +114,12 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
   const {exit} = useApp();
   const {isRawModeSupported} = useStdin();
   const providerDescriptors = listKnownProviders();
+  const accountProviderOptions = providerDescriptors.filter((provider) => provider.supportsAccounts);
+  const accountProviderIdsKey = accountProviderOptions.map((provider) => provider.id).join(",");
   const defaultMediaProvider = providerDescriptors.find((provider) => provider.supportsMedia);
   const defaultAccountProvider = providerDescriptors.find((provider) => provider.supportsAccounts);
   const homeMediaProviderId = providerOverride ?? defaultMediaProvider?.id ?? "bilibili";
-  const homeAccountProviderId = providerOverride ?? defaultAccountProvider?.id ?? homeMediaProviderId;
   const homeMediaProvider = providerDescriptors.find((provider) => provider.id === homeMediaProviderId);
-  const homeAccountProvider = providerDescriptors.find((provider) => provider.id === homeAccountProviderId);
 
   const [reloadKey, setReloadKey] = useState(0);
   const [homeDataKey, setHomeDataKey] = useState(0);
@@ -120,6 +128,9 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
   const [launchInspectOnly, setLaunchInspectOnly] = useState(inspectOnly);
   const [launchVo, setLaunchVo] = useState<PlayerVo>(preferredVo);
   const [homeTab, setHomeTab] = useState<HomeTab>("discover");
+  const [selectedAccountProviderId, setSelectedAccountProviderId] = useState(
+    providerOverride ?? defaultAccountProvider?.id ?? homeMediaProviderId,
+  );
   const [providerSummaries, setProviderSummaries] = useState<HomeProviderSummary[]>([]);
   const [recommendations, setRecommendations] = useState<RecommendationState>({
     loading: !target,
@@ -134,6 +145,21 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
   });
   const [accountForm, setAccountForm] = useState<AccountFormState>(EMPTY_ACCOUNT_FORM);
   const [state, setState] = useState<AppState>(() => (target ? {status: "loading"} : {status: "home"}));
+  const homeAccountProviderId = selectedAccountProviderId;
+  const homeAccountProvider = providerDescriptors.find((provider) => provider.id === homeAccountProviderId);
+
+  useEffect(() => {
+    if (providerOverride) {
+      setSelectedAccountProviderId(providerOverride);
+      return;
+    }
+
+    if (accountProviderOptions.some((provider) => provider.id === selectedAccountProviderId)) {
+      return;
+    }
+
+    setSelectedAccountProviderId(defaultAccountProvider?.id ?? homeMediaProviderId);
+  }, [accountProviderIdsKey, defaultAccountProvider?.id, homeMediaProviderId, providerOverride, selectedAccountProviderId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -146,6 +172,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
           return {
             id: provider.id,
             label: provider.label,
+            supportsAccounts: provider.supportsAccounts,
             detectionHint: provider.detectionHint,
             example: provider.examples[0],
             boundAccounts: accounts.length,
@@ -600,6 +627,16 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
   }
 
   function handleAccountInput(inputKey: string, key: Key): void {
+    if ((key.leftArrow || inputKey === "[") && !providerOverride) {
+      cycleAccountProvider(-1);
+      return;
+    }
+
+    if ((key.rightArrow || inputKey === "]") && !providerOverride) {
+      cycleAccountProvider(1);
+      return;
+    }
+
     if (inputKey === "m") {
       setAccountForm((current) => ({
         ...current,
@@ -650,6 +687,30 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
     if (isPlainTextInput(inputKey, key)) {
       setAccountForm((current) => updateAccountField(current, current.activeField, getAccountFieldValue(current, current.activeField) + inputKey.replace(/[\r\n]+/g, "")));
     }
+  }
+
+  function cycleAccountProvider(direction: -1 | 1): void {
+    if (accountProviderOptions.length <= 1) {
+      return;
+    }
+
+    const currentIndex = Math.max(
+      0,
+      accountProviderOptions.findIndex((provider) => provider.id === homeAccountProviderId),
+    );
+    const nextIndex = (currentIndex + direction + accountProviderOptions.length) % accountProviderOptions.length;
+    const nextProvider = accountProviderOptions[nextIndex];
+    if (!nextProvider) {
+      return;
+    }
+
+    setSelectedAccountProviderId(nextProvider.id);
+    setAccountForm((current) => ({
+      ...current,
+      value: "",
+      note: "",
+      message: undefined,
+    }));
   }
 
   async function runSearch(query: string): Promise<void> {
@@ -766,6 +827,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
         {isRawModeSupported ? <InputController onInput={handleAppInput} /> : null}
         <HomeScreen
           tab={homeTab}
+          providerId={homeMediaProviderId}
           providerLabel={homeMediaProvider?.label ?? homeMediaProviderId}
           inspectOnly={launchInspectOnly}
           preferredVo={launchVo}
@@ -773,6 +835,7 @@ export default function App({target, inspectOnly, preferredVo, useFastProfile, s
           recommendations={recommendations}
           search={search}
           accountForm={accountForm}
+          accountProviderId={homeAccountProviderId}
           accountProviderLabel={homeAccountProvider?.label ?? homeAccountProviderId}
           isInteractive={isRawModeSupported}
         />
@@ -824,6 +887,7 @@ function InputController({onInput}: {onInput: (inputKey: string, key: Key) => vo
 
 function HomeScreen({
   tab,
+  providerId,
   providerLabel,
   inspectOnly,
   preferredVo,
@@ -831,10 +895,12 @@ function HomeScreen({
   recommendations,
   search,
   accountForm,
+  accountProviderId,
   accountProviderLabel,
   isInteractive,
 }: {
   tab: HomeTab;
+  providerId: string;
   providerLabel: string;
   inspectOnly: boolean;
   preferredVo: PlayerVo;
@@ -842,17 +908,19 @@ function HomeScreen({
   recommendations: RecommendationState;
   search: SearchState;
   accountForm: AccountFormState;
+  accountProviderId: string;
   accountProviderLabel: string;
   isInteractive: boolean;
 }) {
   const totalAccounts = providers.reduce((count, provider) => count + provider.boundAccounts, 0);
   const connectedProviders = providers.filter((provider) => provider.boundAccounts > 0).length;
+  const activeLaneLabel = tab === "accounts" ? accountProviderLabel : tab === "library" ? "Personal shelf" : providerLabel;
 
   return (
     <Box flexDirection="column">
       <BrandHeader
         activeTab={tab}
-        providerLabel={providerLabel}
+        providerLabel={activeLaneLabel}
         inspectOnly={inspectOnly}
         preferredVo={preferredVo}
         totalAccounts={totalAccounts}
@@ -871,10 +939,10 @@ function HomeScreen({
       </Box>
 
       <Newline />
-      {tab === "discover" ? <RecommendationPanel state={recommendations} providerLabel={providerLabel} /> : null}
-      {tab === "search" ? <SearchPanel state={search} providerLabel={providerLabel} /> : null}
+      {tab === "discover" ? <RecommendationPanel state={recommendations} providerId={providerId} providerLabel={providerLabel} /> : null}
+      {tab === "search" ? <SearchPanel state={search} providerId={providerId} providerLabel={providerLabel} /> : null}
       {tab === "library" ? <LibraryPanel providers={providers} /> : null}
-      {tab === "accounts" ? <AccountPanel state={accountForm} providerLabel={accountProviderLabel} /> : null}
+      {tab === "accounts" ? <AccountPanel state={accountForm} providerLabel={accountProviderLabel} accountProviderId={accountProviderId} providers={providers} /> : null}
 
       <Newline />
       <Text color="green">Controls</Text>
@@ -884,7 +952,7 @@ function HomeScreen({
           {tab === "discover" ? <Text>Discover: j/k or arrows move, Enter opens, r refreshes, typing jumps into search.</Text> : null}
           {tab === "search" ? <Text>Search: type keywords or paste a Bilibili link, Enter searches or opens, j/k selects results, Esc returns.</Text> : null}
           {tab === "library" ? <Text>Library: this is the future shelf for WeRead, local EPUB/PDF, saved watch-later items, and synced reading progress.</Text> : null}
-          {tab === "accounts" ? <Text>Accounts: type to edit the active field, Tab switches field, m toggles cookie/file mode, d toggles default, Enter binds.</Text> : null}
+          {tab === "accounts" ? <Text>Accounts: left/right or [/] switch live connectors, Tab switches field, m toggles cookie/file mode, d toggles default, Enter binds.</Text> : null}
         </>
       ) : (
         <Text>Interactive input is not available in this terminal session. Run BBCLI in a normal terminal.</Text>
@@ -952,11 +1020,21 @@ function BrandHeader({
   );
 }
 
-function RecommendationPanel({state, providerLabel}: {state: RecommendationState; providerLabel: string}) {
+function RecommendationPanel({
+  state,
+  providerId,
+  providerLabel,
+}: {
+  state: RecommendationState;
+  providerId: string;
+  providerLabel: string;
+}) {
   return (
     <Box flexDirection="column">
       <Text color="green">Discover</Text>
       <Text dimColor>{`${providerLabel} homepage recommendations are live now. This lane will later merge YouTube, Instagram, WeRead, and other connected feeds.`}</Text>
+      <Newline />
+      <ConnectorList title="Discover connectors" items={DISCOVER_CONNECTORS} activeId={providerId} />
       <Newline />
       {state.loading ? <Text dimColor>Loading homepage recommendations...</Text> : null}
       {!state.loading && state.items.length === 0 ? <Text dimColor>{state.message ?? "No recommendations yet."}</Text> : null}
@@ -974,11 +1052,21 @@ function RecommendationPanel({state, providerLabel}: {state: RecommendationState
   );
 }
 
-function SearchPanel({state, providerLabel}: {state: SearchState; providerLabel: string}) {
+function SearchPanel({
+  state,
+  providerId,
+  providerLabel,
+}: {
+  state: SearchState;
+  providerId: string;
+  providerLabel: string;
+}) {
   return (
     <Box flexDirection="column">
       <Text color="green">Search</Text>
       <Text dimColor>{`Current source: ${providerLabel}. This search lane is where Google, YouTube, INS, WeRead, and local libraries will eventually plug in too.`}</Text>
+      <Newline />
+      <ConnectorList title="Search connectors" items={SEARCH_CONNECTORS} activeId={providerId} />
       <Newline />
       <Text>{`> ${state.query || "Type keywords or paste a video link..."}`}</Text>
       {state.loading ? <Text dimColor>Searching...</Text> : null}
@@ -1004,6 +1092,8 @@ function LibraryPanel({providers}: {providers: HomeProviderSummary[]}) {
       <Text color="green">Library</Text>
       <Text dimColor>Library is the long-lived personal shelf for saved media, remote reading shelves, and local files.</Text>
       <Newline />
+      <ConnectorList title="Library sources" items={LIBRARY_CONNECTORS} />
+      <Newline />
       <Text>What will live here:</Text>
       <Text dimColor>- WeRead shelves and reading progress</Text>
       <Text dimColor>- Local EPUB, PDF, and text libraries</Text>
@@ -1018,11 +1108,38 @@ function LibraryPanel({providers}: {providers: HomeProviderSummary[]}) {
   );
 }
 
-function AccountPanel({state, providerLabel}: {state: AccountFormState; providerLabel: string}) {
+function AccountPanel({
+  state,
+  providerLabel,
+  accountProviderId,
+  providers,
+}: {
+  state: AccountFormState;
+  providerLabel: string;
+  accountProviderId: string;
+  providers: HomeProviderSummary[];
+}) {
+  const liveConnectors: WorkspaceConnector[] = providers
+    .filter((provider) => provider.supportsAccounts)
+    .map((provider) => ({
+      id: provider.id,
+      label: provider.label,
+      status: "live",
+      note: provider.boundAccounts > 0
+        ? `${provider.boundAccounts} account${provider.boundAccounts === 1 ? "" : "s"} bound${provider.defaultAccount ? `, default ${provider.defaultAccount}` : ""}.`
+        : "Ready for binding.",
+    }));
+  const plannedConnectors = ACCOUNT_CONNECTORS.filter(
+    (connector) => !liveConnectors.some((provider) => provider.id === connector.id),
+  );
+  const accountConnectors = [...liveConnectors, ...plannedConnectors];
+
   return (
     <Box flexDirection="column">
       <Text color="green">Accounts</Text>
       <Text dimColor>{`Connector target: ${providerLabel}. This workspace will eventually hold Bilibili, WeRead, YouTube, Instagram, and any other provider login flow.`}</Text>
+      <Newline />
+      <ConnectorList title="Account connectors" items={accountConnectors} activeId={accountProviderId} />
       <Newline />
       <Text>{`Bind ${providerLabel} account`}</Text>
       <Text dimColor>{state.existingAccounts.length > 0 ? `Existing: ${state.existingAccounts.join(", ")}${state.defaultAccount ? `  |  default ${state.defaultAccount}` : ""}` : "No accounts bound yet."}</Text>
@@ -1033,6 +1150,30 @@ function AccountPanel({state, providerLabel}: {state: AccountFormState; provider
       <Text color={state.activeField === "note" ? "yellow" : undefined}>{`${state.activeField === "note" ? ">" : " "} Note: ${state.note || "optional"}`}</Text>
       {state.busy ? <Text dimColor>Working...</Text> : null}
       {state.message ? <Text color="yellow">{state.message}</Text> : null}
+    </Box>
+  );
+}
+
+function ConnectorList({
+  title,
+  items,
+  activeId,
+}: {
+  title: string;
+  items: WorkspaceConnector[];
+  activeId?: string;
+}) {
+  return (
+    <Box flexDirection="column">
+      <Text>{title}</Text>
+      {items.map((item) => {
+        const isActive = item.id === activeId;
+        return (
+          <Text key={item.id} color={isActive ? "yellow" : undefined}>
+            {`${isActive ? ">" : " "} ${item.label}  |  ${item.status}  |  ${item.note}`}
+          </Text>
+        );
+      })}
     </Box>
   );
 }

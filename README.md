@@ -85,8 +85,15 @@ From there you can:
 - browse `Discover`
 - type to jump straight into `Search`
 - press `3` to inspect the future `Library` shelf
-- press `4` to bind a Bilibili account inside the Ink UI
+- press `4` to open the unified `Accounts` workspace
 - press `Enter` on a selected result to open it
+
+Each workspace now shows its connector lane directly in the Ink UI:
+
+- `Discover` shows live and planned feed connectors
+- `Search` shows live and planned search connectors
+- `Library` shows the long-term reading and saved-content sources
+- `Accounts` shows bindable providers first, with planned connectors below them
 
 The top-level workspaces are:
 
@@ -122,12 +129,13 @@ The easiest path is now inside the launcher:
 bbcli
 ```
 
-Then press `3` and fill in:
 Then press `4` and fill in:
 
 - account name
 - Cookie text or cookie file path
 - optional note
+
+Inside `Accounts`, use `left/right` or `[` and `]` to switch between live bindable providers when more than one is available.
 
 You can still bind accounts from the command line too.
 
